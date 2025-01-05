@@ -1,0 +1,47 @@
+# Python-specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.env
+# Distribution / packaging
+.Pipfile.lock
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test and coverage files
+.coverage
+.tox/
+.nox/
+.coverage.*
+nosetests.xml
+coverage.xml
+*.hypothesis/
+
+# Others
+*.sqlite3
