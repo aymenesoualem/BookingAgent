@@ -9,7 +9,66 @@ from fastapi.websockets import WebSocketDisconnect
 from starlette.responses import HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
 from dotenv import load_dotenv
+from bookings import book_room, get_available_rooms
+import inspect
+from datetime import date
 
+def book_room_function(room_number: str, customer_name: str, check_in: date, check_out: date):
+    """This function books a room, call this function when the user wants to book a room."""
+    return book_room(room_number, customer_name, check_in, check_out)
+
+def get_available_rooms_function(check_in: date, check_out: date):
+    """This function retunrs available rooms, call this function when the user wants to check for available rooms."""
+
+def function_to_schema(func) -> dict:
+    type_map = {
+        str: "string",
+        int: "integer",
+        float: "number",
+        bool: "boolean",
+        list: "array",
+        dict: "object",
+        type(None): "null",
+    }
+
+    try:
+        signature = inspect.signature(func)
+    except ValueError as e:
+        raise ValueError(
+            f"Failed to get signature for function {func.__name__}: {str(e)}"
+        )
+
+    parameters = {}
+    for param in signature.parameters.values():
+        try:
+            param_type = type_map.get(param.annotation, "string")
+        except KeyError as e:
+            raise KeyError(
+                f"Unknown type annotation {param.annotation} for parameter {param.name}: {str(e)}"
+            )
+        parameters[param.name] = {"type": param_type}
+
+    required = [
+        param.name
+        for param in signature.parameters.values()
+        if param.default == inspect._empty
+    ]
+
+    return {
+        "type": "function",
+        "function": {
+            "name": func.__name__,
+            "description": (func.__doc__ or "").strip(),
+            "parameters": {
+                "type": "object",
+                "properties": parameters,
+                "required": required,
+            },
+        },
+    }
+
+tools= [book_room_function, get_available_rooms_function]
+tool_schemas = [function_to_schema(tool) for tool in tools]
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -220,6 +279,8 @@ async def initialize_session(openai_ws):
             "instructions": system_message,
             "modalities": ["text", "audio"],
             "temperature": 0.8,
+            "tools":tool_schemas,
+
         }
     }
     print('Sending session update:', json.dumps(session_update))
@@ -227,6 +288,7 @@ async def initialize_session(openai_ws):
 
     # Uncomment the next line to have the AI speak first
     await send_initial_conversation_item(openai_ws)
+
 
 if __name__ == "__main__":
     import uvicorn

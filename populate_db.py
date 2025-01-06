@@ -1,5 +1,6 @@
 import psycopg2
 from psycopg2 import sql
+from psycopg2.errors import DuplicateTable, UniqueViolation
 
 # Database connection parameters
 DB_HOST = "localhost"
@@ -8,7 +9,7 @@ DB_NAME = "Hotel_db"
 DB_USER = "agent"
 DB_PASSWORD = "booking"
 
-def create_and_populate_tables():
+def create_tables():
     # SQL commands to create the tables
     create_table_query = """
     CREATE TABLE IF NOT EXISTS rooms (
@@ -25,23 +26,29 @@ def create_and_populate_tables():
         customer_name VARCHAR(100) NOT NULL,
         check_in_date DATE NOT NULL,
         check_out_date DATE NOT NULL,
-        room_id INTEGER NOT NULL REFERENCES rooms(id),
+        room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
+    return create_table_query
 
-    # Sample data to populate the rooms table
+def populate_sample_data():
+    # Parameterized sample data query
     sample_data_query = """
     INSERT INTO rooms (room_number, room_type, is_available, price_per_night, max_guests)
-    VALUES
-        ('101', 'Single', TRUE, 50.00, 1),
-        ('102', 'Double', TRUE, 75.00, 2),
-        ('103', 'Suite', TRUE, 120.00, 4),
-        ('104', 'Single', TRUE, 50.00, 1),
-        ('105', 'Double', TRUE, 75.00, 2)
+    VALUES (%s, %s, %s, %s, %s)
     ON CONFLICT (room_number) DO NOTHING;
     """
+    sample_data = [
+        ('101', 'Single', True, 50.00, 1),
+        ('102', 'Double', True, 75.00, 2),
+        ('103', 'Suite', True, 120.00, 4),
+        ('104', 'Single', True, 50.00, 1),
+        ('105', 'Double', True, 75.00, 2)
+    ]
+    return sample_data_query, sample_data
 
+def create_and_populate_tables():
     try:
         # Connect to PostgreSQL
         connection = psycopg2.connect(
@@ -54,22 +61,28 @@ def create_and_populate_tables():
         connection.autocommit = True
         cursor = connection.cursor()
 
-        # Execute table creation and data insertion
+        # Execute table creation
         print("Creating tables...")
-        cursor.execute(create_table_query)
+        cursor.execute(create_tables())
         print("Tables created successfully.")
 
+        # Insert sample data
         print("Inserting sample data into rooms table...")
-        cursor.execute(sample_data_query)
+        query, data = populate_sample_data()
+        cursor.executemany(query, data)
         print("Sample data inserted successfully.")
 
+    except DuplicateTable as dt_err:
+        print("Table already exists:", dt_err)
+    except UniqueViolation as uv_err:
+        print("Duplicate entry error:", uv_err)
     except psycopg2.Error as e:
         print("Error while interacting with PostgreSQL:", e)
     finally:
         # Close the cursor and connection
-        if cursor:
+        if 'cursor' in locals() and cursor:
             cursor.close()
-        if connection:
+        if 'connection' in locals() and connection:
             connection.close()
         print("PostgreSQL connection closed.")
 
