@@ -1,0 +1,31 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: booking
+      POSTGRES_DB: Hotel_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma-db
+    restart: always
+    environment:
+      CHROMA_PORT: 8000
+      CHROMA_DB_DIR: /data/chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/data/chroma
+
+volumes:
+  postgres_data:
+  chroma_data:
