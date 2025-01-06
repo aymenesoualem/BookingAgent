@@ -18,7 +18,8 @@ def book_room_function(room_number: str, customer_name: str, check_in: date, che
     return book_room(room_number, customer_name, check_in, check_out)
 
 def get_available_rooms_function(check_in: date, check_out: date):
-    """This function retunrs available rooms, call this function when the user wants to check for available rooms."""
+    """This function returns available rooms, call this function when the user wants to check for available rooms."""
+    return get_available_rooms(check_in, check_out)
 
 def function_to_schema(func) -> dict:
     type_map = {
