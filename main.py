@@ -10,8 +10,11 @@ from starlette.responses import HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
 from dotenv import load_dotenv
 from bookings import book_room, get_available_rooms
+import ssl
 import inspect
+from typing import List, Dict, Any
 from datetime import date
+
 
 def book_room_function(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
     """This function books a room, call this function when the user wants to book a room."""
@@ -21,11 +24,14 @@ def get_available_rooms_function(check_in: date, check_out: date, room_type: str
     """This function returns available rooms, call this function when the user wants to check for available rooms."""
     return get_available_rooms(check_in, check_out,room_type, max_guests)
 
-def function_to_schema(func) -> dict:
+
+
+def function_to_schema(func) -> str:
     """
-    Converts a Python function's signature into a JSON schema format.
-    This schema can be used to describe the function for tools like OpenAI API.
+    Converts a Python function's signature into a schema format suitable for OpenAI Realtime API
+    and returns it as a JSON string.
     """
+    # Mapping Python types to OpenAI API types
     type_map = {
         str: "string",
         int: "integer",
@@ -35,6 +41,8 @@ def function_to_schema(func) -> dict:
         dict: "object",
         type(None): "null",
         date: "string",  # Represent date as a string in ISO 8601 format
+        List: "array",  # Handle List type
+        Dict: "object",  # Handle Dict type
     }
 
     try:
@@ -52,33 +60,46 @@ def function_to_schema(func) -> dict:
             raise KeyError(
                 f"Unknown type annotation {param.annotation} for parameter {param.name}: {str(e)}"
             )
-        parameters[param.name] = {"type": param_type}
 
-        # Add a format for date type
+        param_info = {"type": param_type}
+
+        # Check if the parameter is a date type and add format
         if param.annotation == date:
-            parameters[param.name]["format"] = "date"
+            param_info["format"] = "date"
 
+        # Handle more complex types (e.g., List, Dict)
+        if hasattr(param.annotation, "__origin__"):
+            if param.annotation.__origin__ == list:
+                param_info["items"] = {"type": "string"}  # Example for List, could be customized
+            elif param.annotation.__origin__ == dict:
+                param_info["additionalProperties"] = {"type": "string"}  # Example for Dict
+
+        parameters[param.name] = param_info
+
+    # Identify required parameters (those without a default value)
     required = [
         param.name
         for param in signature.parameters.values()
         if param.default == inspect._empty
     ]
 
-    return {
+    # Build the function schema
+    schema = {
         "type": "function",
-        "function": {
-            "name": func.__name__,
-            "description": (func.__doc__ or "").strip(),
-            "parameters": {
-                "type": "object",
-                "properties": parameters,
-                "required": required,
-            },
+        "name": func.__name__,
+        "description": (func.__doc__ or "").strip(),
+        "parameters": {
+            "type": "object",
+            "properties": parameters,
+            "required": required,
         },
     }
 
+    # Return the schema as a JSON string
+    return json.dumps(schema, indent=2)
+
 tools= [book_room_function, get_available_rooms_function]
-tool_schemas = [function_to_schema(tool) for tool in tools]
+tool_schemas = "[" + ",\n".join(function_to_schema(tool) for tool in tools) + "]"
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -93,8 +114,21 @@ You are a multilingual AI assistant specializing in providing seamless hotel boo
 
 Your tone should be professional, friendly, and customer-focused, ensuring users feel supported and valued at every step. Additionally, emphasize the benefits of enhanced customer experience, operational efficiency, and global accessibility in all interactions.
 
+When the user asks for a service that involves invoking a function (e.g., booking a room, retrieving available rooms), respond in the following format:
+
+    function: "<function_name>", parameters: <parameters_as_dict>
+
+For example:
+    function: "book_room_function", parameters: {"hotel_name": "Hotel XYZ", "room_number": "101", "customer_name": "John Doe", "check_in": "2025-01-10", "check_out": "2025-01-12"}
+
+Once the model returns the above output, it will automatically invoke the respective function through `handle_tool_invocation` and process the user's request. If there is no tool invocation, simply respond with the appropriate text.
+
+You have access to the following functions:"""+tool_schemas+"""".
+If you ever need to invoke any function, always format it as described above, and ensure it is routed to the `handle_tool_invocation` function.
+
 Adapt your approach to cater to other potential sectors like healthcare (e.g., appointment scheduling), transportation hubs (e.g., airports or train stations), or similar industries requiring conversational support. Be mindful of cultural nuances and the specific context of the user's needs.
 """
+
 VOICE= 'alloy'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
@@ -132,9 +166,13 @@ async def handle_media_stream(websocket: WebSocket):
     """Handle WebSocket connections between Twilio and OpenAI."""
     print("Client connected")
     await websocket.accept()
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
 
     async with websockets.connect(
             'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
+            ssl=ssl_context,
             extra_headers={
                 "Authorization": f"Bearer {OPENAI_API_KEY}",
                 "OpenAI-Beta": "realtime=v1"
@@ -289,10 +327,11 @@ async def initialize_session(openai_ws):
             "instructions": system_message,
             "modalities": ["text", "audio"],
             "temperature": 0.8,
-            "tools":tool_schemas,
-
         }
-    }
+}
+
+
+
     print('Sending session update:', json.dumps(session_update))
     await openai_ws.send(json.dumps(session_update))
 
