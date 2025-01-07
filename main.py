@@ -16,6 +16,7 @@ from typing import List, Dict, Any
 from datetime import date
 
 
+
 def book_room_function(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
     """This function books a room, call this function when the user wants to book a room."""
     return book_room(hotel_name, room_number, customer_name, check_in, check_out)
@@ -100,12 +101,52 @@ def function_to_schema(func) -> str:
 
 tools= [book_room_function, get_available_rooms_function]
 tool_schemas = "[" + ",\n".join(function_to_schema(tool) for tool in tools) + "]"
+async def handle_tool_invocation(function_name: str, parameters: dict):
+    """Call the relevant function based on the tool invocation."""
+
+    # Dynamically fetch the function by name and call it with the parameters
+    function_map = {
+        "book_room_function": book_room_function,
+        "get_available_rooms_function": get_available_rooms_function
+        # Add more functions here as needed
+    }
+
+    function = function_map.get(function_name)
+
+    if function:
+        # Call the function with parameters (unpack the dictionary into function arguments)
+        return await function(**parameters)
+    else:
+        return f"Unknown function requested: {function_name}"
+
+
+async def process_model_output(model_response: str):
+    """Process the model output and check if it includes a tool invocation."""
+    if "function:" in model_response:
+        # Extract function name and parameters from the model response
+        try:
+            import ast
+            # Extract the function call
+            function_name_start = model_response.find("function:") + len("function:")
+            parameters_start = model_response.find("parameters:") + len("parameters:")
+
+            function_name = model_response[function_name_start:parameters_start].strip().strip('"')
+            parameters_str = model_response[parameters_start:].strip()
+            parameters = ast.literal_eval(parameters_str)  # Safely parse the parameters as a dictionary
+
+            # Invoke the tool through the handle_tool_invocation function
+            return await handle_tool_invocation(function_name, parameters)
+        except Exception as e:
+            return f"Error parsing model output: {str(e)}"
+    else:
+        # If it's not a tool invocation, return the normal response
+        return model_response
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PORT = int(os.getenv("PORT", 5050))
 system_message = """
-You are a multilingual AI assistant specializing in providing seamless hotel booking and support services through natural and engaging conversations. Your primary tasks include:
+You are a multilingual AI assistant specializing in providing seamless hotel booking and support services in Morocco through natural and engaging conversations. Your primary tasks include:
 1. Assisting users in searching for and booking hotels, offering personalized recommendations, managing bookings, and providing instant confirmations or modifications.
 2. Offering on-site support such as assistance with check-in/check-out, handling service requests, and providing local recommendations for attractions, dining, and transportation.
 3. Supporting multilingual interactions by communicating fluently in various languages and offering real-time translation between users and hotel staff.
@@ -125,7 +166,7 @@ Once the model returns the above output, it will automatically invoke the respec
 
 You have access to the following functions:"""+tool_schemas+"""".
 If you ever need to invoke any function, always format it as described above, and ensure it is routed to the `handle_tool_invocation` function.
-
+Only specify the function call in the response.done event
 Adapt your approach to cater to other potential sectors like healthcare (e.g., appointment scheduling), transportation hubs (e.g., airports or train stations), or similar industries requiring conversational support. Be mindful of cultural nuances and the specific context of the user's needs.
 """
 
@@ -134,7 +175,7 @@ LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
     'response.done', 'input_audio_buffer.committed',
     'input_audio_buffer.speech_stopped', 'input_audio_buffer.speech_started',
-    'session.created'
+    'session.created','function_call_arguments.done'
 ]
 SHOW_TIMING_MATH = False
 app = FastAPI()
@@ -223,6 +264,7 @@ async def handle_media_stream(websocket: WebSocket):
                     if response['type'] in LOG_EVENT_TYPES:
                         print(f"Received event: {response['type']}", response)
 
+
                     if response.get('type') == 'response.audio.delta' and 'delta' in response:
                         audio_payload = base64.b64encode(base64.b64decode(response['delta'])).decode('utf-8')
                         audio_delta = {
@@ -251,6 +293,16 @@ async def handle_media_stream(websocket: WebSocket):
                         if last_assistant_item:
                             print(f"Interrupting response with id: {last_assistant_item}")
                             await handle_speech_started_event()
+
+                    if response.get('type') == 'response.done':
+                        # Safely extract the transcript if output is available
+                        output = response['response'].get('output', [])
+                        if output:
+                            message = output[0]['content'][0].get('transcript', "No transcript available")
+                            await process_model_output(message)
+                            print(f"Received response: {message}")
+                        else:
+                            print("No output in response.done")
             except Exception as e:
                 print(f"Error in send_to_twilio: {e}")
 
