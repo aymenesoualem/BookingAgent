@@ -5,6 +5,13 @@ from datetime import date
 
 Base = declarative_base()
 
+class Hotel(Base):
+    __tablename__ = 'hotels'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    area = Column(String(100), nullable=False)
+    rooms = relationship('Room', back_populates='hotel')
+
 class Room(Base):
     __tablename__ = 'rooms'
     id = Column(Integer, primary_key=True)
@@ -13,6 +20,8 @@ class Room(Base):
     is_available = Column(Boolean, default=True, nullable=False)
     price_per_night = Column(Numeric(10, 2), nullable=False)
     max_guests = Column(Integer, nullable=False)
+    hotel_id = Column(Integer, ForeignKey('hotels.id'), nullable=False)
+    hotel = relationship('Hotel', back_populates='rooms')
 
 class Booking(Base):
     __tablename__ = 'bookings'
@@ -33,12 +42,72 @@ Session = sessionmaker(bind=engine)
 def get_session():
     return Session()
 
-def book_room(room_number: str, customer_name: str, check_in: date, check_out: date):
+def get_available_rooms(check_in: date, check_out: date, hotel_name: str, room_type: str = None, max_guests: int = None):
+    """
+    Get available rooms based on hotel name, check-in, check-out, optional room type, and max guests.
+    """
     session = get_session()
     try:
-        room = session.query(Room).filter_by(room_number=room_number).first()
+        # Find the hotel by name
+        hotel = session.query(Hotel).filter(Hotel.name == hotel_name).first()
+        if not hotel:
+            return f"Hotel '{hotel_name}' does not exist."
+
+        # Subquery to find rooms booked during the given period
+        subquery = session.query(Booking.room_id).filter(
+            Booking.check_in_date < check_out,
+            Booking.check_out_date > check_in
+        ).subquery()
+
+        # Query to find rooms in the specified hotel that are not in the subquery and are available
+        query = session.query(Room).filter(
+            Room.hotel_id == hotel.id,
+            Room.id.notin_(subquery),
+            Room.is_available == True
+        )
+
+        # Filter by room type if provided
+        if room_type:
+            query = query.filter(Room.room_type == room_type)
+
+        # Filter by max guests if provided
+        if max_guests:
+            query = query.filter(Room.max_guests >= max_guests)
+
+        available_rooms = query.all()
+
+        if not available_rooms:
+            return f"No rooms available for the selected dates in hotel '{hotel_name}', room type: {room_type}, and max guests: {max_guests}."
+
+        # Return room details
+        return [
+            {
+                "room_number": room.room_number,
+                "room_type": room.room_type,
+                "price_per_night": float(room.price_per_night),
+                "max_guests": room.max_guests,
+            }
+            for room in available_rooms
+        ]
+    finally:
+        session.close()
+
+
+def book_room(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
+    """
+    Book a room in a specified hotel for a given period.
+    """
+    session = get_session()
+    try:
+        # Find the hotel by name
+        hotel = session.query(Hotel).filter(Hotel.name == hotel_name).first()
+        if not hotel:
+            return f"Hotel '{hotel_name}' does not exist."
+
+        # Find the room in the specified hotel
+        room = session.query(Room).filter_by(room_number=room_number, hotel_id=hotel.id).first()
         if not room:
-            return f"Room {room_number} does not exist."
+            return f"Room {room_number} does not exist in hotel '{hotel_name}'."
 
         # Check for overlapping bookings
         overlapping_bookings = session.query(Booking).filter(
@@ -48,7 +117,7 @@ def book_room(room_number: str, customer_name: str, check_in: date, check_out: d
         ).all()
 
         if overlapping_bookings:
-            return f"Room {room_number} is not available from {check_in} to {check_out}."
+            return f"Room {room_number} in hotel '{hotel_name}' is not available from {check_in} to {check_out}."
 
         # Create a new booking
         new_booking = Booking(
@@ -60,37 +129,61 @@ def book_room(room_number: str, customer_name: str, check_in: date, check_out: d
         session.add(new_booking)
         session.commit()
 
-        return f"Room {room_number} successfully booked for {customer_name} from {check_in} to {check_out}."
+        return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer_name} from {check_in} to {check_out}."
     finally:
         session.close()
 
-
-def get_available_rooms(check_in: date, check_out: date):
-    session = get_session()
-    try:
-        # Subquery to find rooms that are booked during the given period
-        subquery = session.query(Booking.room_id).filter(
-            Booking.check_in_date < check_out,
-            Booking.check_out_date > check_in
-        ).subquery()
-
-        # Query to find rooms not in the subquery and are available
-        available_rooms = session.query(Room).filter(
-            Room.id.notin_(subquery), Room.is_available == True
-        ).all()
-
-        if not available_rooms:
-            return "No rooms available for the selected dates."
-
-        return [room.room_number for room in available_rooms]
-    finally:
-        session.close()
-
-# ####Uncomment to test the  code
+# ###Uncomment to test code
 # if __name__ == "__main__":
-#     # Test booking a room
-#     print(book_room('101', 'John Doe', date(2025, 1, 10), date(2025, 1, 15)))
+#     from datetime import datetime
 #
-#     # Get available rooms
-#     available_rooms = get_available_rooms(date(2025, 1, 10), date(2025, 1, 15))
-#     print("Available rooms:", available_rooms)
+#     # Input for hotel details
+#     hotel_name = input("Enter the hotel name: ").strip()
+#     room_type = input("Enter the desired room type (or leave blank for any): ").strip()
+#     max_guests = input("Enter the maximum number of guests (or leave blank for any): ").strip()
+#
+#     # Parse max_guests input
+#     max_guests = int(max_guests) if max_guests.isdigit() else None
+#
+#     # Input for booking dates
+#     check_in_date = input("Enter check-in date (YYYY-MM-DD): ").strip()
+#     check_out_date = input("Enter check-out date (YYYY-MM-DD): ").strip()
+#
+#     try:
+#         # Convert input dates to `date` objects
+#         check_in = datetime.strptime(check_in_date, "%Y-%m-%d").date()
+#         check_out = datetime.strptime(check_out_date, "%Y-%m-%d").date()
+#
+#         # Ensure the dates are valid
+#         if check_in >= check_out:
+#             print("Check-out date must be after check-in date.")
+#         else:
+#             # Get available rooms
+#             available_rooms = get_available_rooms(
+#                 check_in, check_out, hotel_name, room_type if room_type else None, max_guests
+#             )
+#
+#             if isinstance(available_rooms, str):
+#                 # No rooms available
+#                 print(available_rooms)
+#             else:
+#                 # Display available rooms
+#                 print("Available rooms:")
+#                 for room in available_rooms:
+#                     print(
+#                         f"Room {room['room_number']} - Type: {room['room_type']}, "
+#                         f"Price per night: {room['price_per_night']}, Max Guests: {room['max_guests']}"
+#                     )
+#
+#                 # Ask if the user wants to book a room
+#                 book_choice = input("Do you want to book a room? (yes/no): ").strip().lower()
+#                 if book_choice == "yes":
+#                     room_number = input("Enter the room number to book: ").strip()
+#                     customer_name = input("Enter your name: ").strip()
+#
+#                     # Attempt to book the room
+#                     booking_response = book_room(hotel_name, room_number, customer_name, check_in, check_out)
+#                     print(booking_response)
+#
+#     except ValueError:
+#         print("Invalid date format. Please enter dates in YYYY-MM-DD format.")

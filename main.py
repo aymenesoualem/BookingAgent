@@ -13,15 +13,19 @@ from bookings import book_room, get_available_rooms
 import inspect
 from datetime import date
 
-def book_room_function(room_number: str, customer_name: str, check_in: date, check_out: date):
+def book_room_function(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
     """This function books a room, call this function when the user wants to book a room."""
-    return book_room(room_number, customer_name, check_in, check_out)
+    return book_room(hotel_name, room_number, customer_name, check_in, check_out)
 
-def get_available_rooms_function(check_in: date, check_out: date):
+def get_available_rooms_function(check_in: date, check_out: date, room_type: str = None, max_guests: int = None):
     """This function returns available rooms, call this function when the user wants to check for available rooms."""
-    return get_available_rooms(check_in, check_out)
+    return get_available_rooms(check_in, check_out,room_type, max_guests)
 
 def function_to_schema(func) -> dict:
+    """
+    Converts a Python function's signature into a JSON schema format.
+    This schema can be used to describe the function for tools like OpenAI API.
+    """
     type_map = {
         str: "string",
         int: "integer",
@@ -30,6 +34,7 @@ def function_to_schema(func) -> dict:
         list: "array",
         dict: "object",
         type(None): "null",
+        date: "string",  # Represent date as a string in ISO 8601 format
     }
 
     try:
@@ -48,6 +53,10 @@ def function_to_schema(func) -> dict:
                 f"Unknown type annotation {param.annotation} for parameter {param.name}: {str(e)}"
             )
         parameters[param.name] = {"type": param_type}
+
+        # Add a format for date type
+        if param.annotation == date:
+            parameters[param.name]["format"] = "date"
 
     required = [
         param.name

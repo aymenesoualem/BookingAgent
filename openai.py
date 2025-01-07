@@ -4,70 +4,14 @@ import json
 import asyncio
 import websockets
 from dotenv import load_dotenv
-from datetime import date
 import ssl
 
-from bookings import get_available_rooms, book_room
+from main import tools, function_to_schema, system_message
 
-
-def book_room_function(room_number: str, customer_name: str, check_in: date, check_out: date):
-    """This function books a room, call this function when the user wants to book a room."""
-    return book_room(room_number, customer_name, check_in, check_out)
-
-def get_available_rooms_function(check_in: date, check_out: date):
-    """This function returns available rooms, call this function when the user wants to check for available rooms."""
-    return get_available_rooms(check_in, check_out)
-
-def function_to_schema(func) -> dict:
-    type_map = {
-        str: "string",
-        int: "integer",
-        float: "number",
-        bool: "boolean",
-        list: "array",
-        dict: "object",
-        type(None): "null",
-    }
-
-    try:
-        signature = inspect.signature(func)
-    except ValueError as e:
-        raise ValueError(
-            f"Failed to get signature for function {func.__name__}: {str(e)}"
-        )
-
-    parameters = {}
-    for param in signature.parameters.values():
-        try:
-            param_type = type_map.get(param.annotation, "string")
-        except KeyError as e:
-            raise KeyError(
-                f"Unknown type annotation {param.annotation} for parameter {param.name}: {str(e)}"
-            )
-        parameters[param.name] = {"type": param_type}
-
-    required = [
-        param.name
-        for param in signature.parameters.values()
-        if param.default == inspect._empty
-    ]
-
-    return {
-        "type": "function",
-        "function": {
-            "name": func.__name__,
-            "description": (func.__doc__ or "").strip(),
-            "parameters": {
-                "type": "object",
-                "properties": parameters,
-                "required": required,
-            },
-        },
-    }
-
-tools= [book_room_function, get_available_rooms_function]
+# Generate tool schemas
 tool_schemas = [function_to_schema(tool) for tool in tools]
 print(tool_schemas)
+
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -82,14 +26,15 @@ async def test_websocket():
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
+
         # Define headers
         headers = {
             "Authorization": f"Bearer {OPENAI_API_KEY}",
             "OpenAI-Beta": "realtime=v1"
         }
 
-        # Use the connect function with headers directly
-        async with websockets.connect(uri,ssl=ssl_context, additional_headers=headers) as websocket:
+        # Connect to the WebSocket
+        async with websockets.connect(uri, ssl=ssl_context, additional_headers=headers) as websocket:
             print("Connected to WebSocket")
 
             # Initialize the session
@@ -100,7 +45,7 @@ async def test_websocket():
                     "input_audio_format": "g711_ulaw",
                     "output_audio_format": "g711_ulaw",
                     "voice": "alloy",
-                    "instructions": "System message",
+                    "instructions": system_message,
                     "modalities": ["text", "audio"],  # Updated to include audio modality
                     "temperature": 0.8,
                     "tools": tool_schemas,  # Corrected to pass tool_schemas directly
@@ -126,7 +71,25 @@ async def test_websocket():
 
             # Receive the response
             response = await websocket.recv()
-            print(f"Response: {response}")
+            response_data = json.loads(response)
+
+            # Extract the agent's response
+            agent_response = None
+            if (
+                "type" in response_data
+                and response_data["type"] == "conversation.item.create"
+                and "item" in response_data
+                and "content" in response_data["item"]
+            ):
+                agent_response = next(
+                    (item["text"] for item in response_data["item"]["content"] if item["type"] == "input_text"),
+                    None
+                )
+
+            if agent_response:
+                print(f"Agent Response: {agent_response}")
+            else:
+                print(f"Full Response: {response_data}")
 
     except Exception as e:
         print(f"Error: {str(e)}")
