@@ -299,6 +299,22 @@ async def handle_media_stream(websocket: WebSocket):
                                             "output": json.dumps(result)
                                         }
                                     }))
+
+                                    follow_up_answer = {
+                                        "type": "conversation.item.create",
+                                        "item": {
+                                            "type": "message",
+                                            "role": "user",
+                                            "content": [
+                                                {
+                                                    "type": "input_text",
+                                                    "text": "Follow up with the user after using the function,dont keep quiet after invoking a function,"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                    await openai_ws.send(json.dumps(follow_up_answer))
+
                         else:
                             print("No output in response.done")
 
@@ -323,6 +339,13 @@ async def handle_media_stream(websocket: WebSocket):
                             last_assistant_item = response['item_id']
 
                         await send_mark(websocket, stream_sid)
+
+                    # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
+                    if response.get('type') == 'input_audio_buffer.speech_started':
+                        print("Speech started detected.")
+                        if last_assistant_item:
+                            print(f"Interrupting response with id: {last_assistant_item}")
+                            await handle_speech_started_event()
 
 
             except Exception as e:
