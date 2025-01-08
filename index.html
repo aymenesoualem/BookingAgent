@@ -18,6 +18,19 @@
             padding: 0;
             background-color: #f4f1e3;
         }
+
+        .logo-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+        }
+
+        .logo-container img {
+            width: 150px;
+            height: auto;
+        }
+
         .top-right-buttons {
             position: absolute;
             top: 20px;
@@ -25,6 +38,7 @@
             display: flex;
             gap: 15px;
         }
+
         .top-right-buttons button {
             font-size: 14px;
             padding: 8px 12px;
@@ -33,9 +47,11 @@
             border: none;
             border-radius: 5px;
         }
+
         .top-right-buttons button:hover {
             background-color: #d17a01;
         }
+
         .hero-section {
             background-size: cover;
             height: 50vh;
@@ -45,11 +61,13 @@
             color: white;
             text-align: center;
         }
+
         .hero-section h1 {
             font-size: 3.5rem;
             margin: 0;
             text-shadow: 3px 3px 5px rgba(0,0,0,0.5);
         }
+
         .search-form {
             margin: -10% auto 0;
             padding: 20px;
@@ -59,18 +77,21 @@
             width: 80%;
             max-width: 1000px;
         }
+
         .search-form h2 {
             font-size: 2.5rem;
             margin-bottom: 20px;
             text-align: center;
             color: #f1a801;
         }
+
         .form-group {
             display: flex;
             justify-content: center;
             margin-bottom: 20px;
             width: 100%;
         }
+
         .form-group input, .form-group select {
             padding: 12px;
             font-size: 14px;
@@ -90,6 +111,7 @@
             display: flex;
             justify-content: space-between;
         }
+
         .action-buttons button {
             width: 48%;
             padding: 12px;
@@ -100,6 +122,7 @@
             border-radius: 5px;
             cursor: pointer;
         }
+
         .action-buttons button:hover {
             background-color: #d17a01;
         }
@@ -110,12 +133,13 @@
             color: #777;
         }
 
-        /* New Circular Call Button */
+        /* Circular Call Button */
         .call-button {
             display: flex;
             justify-content: center;
             margin-top: 20px;
         }
+
         .call-button button {
             width: 70px;
             height: 70px;
@@ -131,6 +155,7 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             transition: background-color 0.3s, transform 0.3s;
         }
+
         .call-button button:hover {
             background-color: #d17a01;
             transform: scale(1.1);
@@ -138,6 +163,11 @@
     </style>
 </head>
 <body>
+
+    <!-- Logo Section -->
+    <div class="logo-container">
+        <img src="assets/banner.jpg" alt="Hotel Logo">
+    </div>
 
     <!-- Register and Sign In Buttons (Top Right) -->
     <div class="top-right-buttons">
@@ -152,7 +182,7 @@
 
     <!-- Search Form for Hotel Reservation -->
     <div class="search-form">
-        <h2>Book Your Moroccan Stay</h2>
+        <h2>M0RAVELO: Where Comfort Meets Elegance</h2>
 
         <!-- Destination Input -->
         <div class="form-group">
@@ -191,7 +221,7 @@
             <button onclick="alert('Proceeding with Reservation...')">Make a Reservation</button>
         </div>
 
-        <!-- Circular Call Button -->
+        <!-- New Circular Call Button -->
         <div class="call-button">
             <button onclick="openNgrokEndpoint()">
                 <i class="fas fa-phone-alt"></i> <!-- Phone icon -->
@@ -222,10 +252,11 @@
 
         function openNgrokEndpoint() {
             // Replace with your actual ngrok endpoint
-            const ngrokURL = "https://2159-160-176-91-245.ngrok-free.app";
+            const ngrokURL = "https://dfbd-105-74-12-126.ngrok-free.app";
             window.open(ngrokURL, "_blank");
         }
     </script>
 
 </body>
 </html>
+
