@@ -1,7 +1,104 @@
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.header import Header
+from templates.email_template import BOOKING_EMAIL_TEMPLATE
 from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Numeric, Boolean, TIMESTAMP, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+import sys
 from datetime import date
+import os
+
+from dotenv import load_dotenv
+from tavily import TavilyClient
+from twilio.rest import Client
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+load_dotenv()
+
+def web_scraper_for_recommendation(topic:str):
+    client = TavilyClient(api_key=os.getenv('API_KEY'))
+    response = client.search(topic)
+    return  response.get('results')
+
+
+def send_sms(to: str, body: str):
+    """Send an SMS using Twilio."""
+    account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+    auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+    from_number = os.getenv('TWILIO_FROM_NUMBER')
+    # Initialize Twilio client
+    client = Client(account_sid, auth_token)
+
+    # Send SMS
+    message = client.messages.create(
+        body=body,  # SMS body/content
+        from_=from_number,  # Your Twilio phone number
+        to=to  # Recipient phone number
+    )
+
+    # Print message SID (optional for tracking)
+    print(f"Message SID: {message.sid}")
+
+    return message.sid  # Return the SID of the sent message for reference
+
+# if __name__ == '__main__':
+#     send_sms("+212679675314","Hi")
+#     result = web_scraper_for_recommendation("Nice things to do in casa")
+#     print (result)
+
+load_dotenv()
+
+def send_email_with_banner(hotel_name, room_number, customer_name, check_in, check_out):
+    """Send a booking confirmation email with the banner image."""
+    try:
+        from_email = os.getenv("FROM_EMAIL")
+        to_email = os.getenv("HOTEL_GROUP_EMAIL")
+        email_password = os.getenv("EMAIL_PASSWORD")
+
+        if not from_email or not to_email or not email_password:
+            return "Erreur : Les informations d'authentification ne sont pas complètes."
+
+        subject = f"Confirmation de réservation - {hotel_name}, Chambre {room_number}"
+        
+        # Generate email content from template
+        email_body = BOOKING_EMAIL_TEMPLATE.replace("{{hotel_name}}", hotel_name) \
+                                           .replace("{{room_number}}", str(room_number)) \
+                                           .replace("{{customer_name}}", customer_name) \
+                                           .replace("{{check_in}}", check_in) \
+                                           .replace("{{check_out}}", check_out)
+        
+        msg = MIMEMultipart('related')
+        msg['From'] = from_email
+        msg['To'] = to_email
+        msg['Subject'] = Header(subject, 'utf-8')
+
+        # Attach HTML content
+        msg.attach(MIMEText(email_body, 'html', 'utf-8'))
+
+        # Attach banner image
+        try:
+            with open('../assets/banner.jpg', 'rb') as img:
+                mime_image = MIMEImage(img.read())
+                mime_image.add_header('Content-ID', '<BookingBanner>')
+                msg.attach(mime_image)
+        except FileNotFoundError:
+            return "Erreur : Le fichier banner.jpg est introuvable."
+
+        # Send the email
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=60) as server:
+            server.starttls()
+            server.login(from_email, email_password)
+            server.send_message(msg)
+
+        return f"Email envoyé avec succès pour la réservation de {customer_name} dans l'hôtel {hotel_name}!"
+
+    except smtplib.SMTPException as e:
+        return f"Erreur SMTP lors de l'envoi de l'email: {str(e)}"
+    except Exception as e:
+        return f"Erreur lors de l'envoi de l'email: {str(e)}"
 
 Base = declarative_base()
 
@@ -147,58 +244,3 @@ def book_room(hotel_name: str, room_number: str, customer_name: str, check_in: d
         return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer_name} from {check_in} to {check_out}."
     finally:
         session.close()
-
-# ###Uncomment to test code
-# if __name__ == "__main__":
-#     from datetime import datetime
-#
-#     # Input for hotel details
-#     hotel_name = input("Enter the hotel name: ").strip()
-#     room_type = input("Enter the desired room type (or leave blank for any): ").strip()
-#     max_guests = input("Enter the maximum number of guests (or leave blank for any): ").strip()
-#
-#     # Parse max_guests input
-#     max_guests = int(max_guests) if max_guests.isdigit() else None
-#
-#     # Input for booking dates
-#     check_in_date = input("Enter check-in date (YYYY-MM-DD): ").strip()
-#     check_out_date = input("Enter check-out date (YYYY-MM-DD): ").strip()
-#
-#     try:
-#         # Convert input dates to `date` objects
-#         check_in = datetime.strptime(check_in_date, "%Y-%m-%d").date()
-#         check_out = datetime.strptime(check_out_date, "%Y-%m-%d").date()
-#
-#         # Ensure the dates are valid
-#         if check_in >= check_out:
-#             print("Check-out date must be after check-in date.")
-#         else:
-#             # Get available rooms
-#             available_rooms = get_available_rooms(
-#                 check_in, check_out, hotel_name, room_type if room_type else None, max_guests
-#             )
-#
-#             if isinstance(available_rooms, str):
-#                 # No rooms available
-#                 print(available_rooms)
-#             else:
-#                 # Display available rooms
-#                 print("Available rooms:")
-#                 for room in available_rooms:
-#                     print(
-#                         f"Room {room['room_number']} - Type: {room['room_type']}, "
-#                         f"Price per night: {room['price_per_night']}, Max Guests: {room['max_guests']}"
-#                     )
-#
-#                 # Ask if the user wants to book a room
-#                 book_choice = input("Do you want to book a room? (yes/no): ").strip().lower()
-#                 if book_choice == "yes":
-#                     room_number = input("Enter the room number to book: ").strip()
-#                     customer_name = input("Enter your name: ").strip()
-#
-#                     # Attempt to book the room
-#                     booking_response = book_room(hotel_name, room_number, customer_name, check_in, check_out)
-#                     print(booking_response)
-#
-#     except ValueError:
-#         print("Invalid date format. Please enter dates in YYYY-MM-DD format.")

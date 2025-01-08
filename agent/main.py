@@ -2,20 +2,17 @@ import os
 import json
 import base64
 import asyncio
-from xml.etree.ElementTree import tostring
-from email_booking import send_email_with_banner
 import websockets
-from fastapi import FastAPI, WebSocket, Request, Form
+from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import JSONResponse
 from fastapi.websockets import WebSocketDisconnect
 from starlette.responses import HTMLResponse
-from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
+from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
-from bookings import book_room, get_available_rooms
+from tools import book_room, get_available_rooms, web_scraper_for_recommendation, send_sms, send_email_with_banner
 import ssl
+import inspect
 from datetime import date
-from webscraper import web_scraper_for_recommendation,send_sms
-
 
 
 def book_room_function(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
@@ -48,11 +45,6 @@ def get_available_rooms_function(
 def webscraper_for_recommendations_function(topic:str):
     """Fetches for things to do in the hotels area, uae this function when the user asks for things to do while visiting the hotel's area."""
     return web_scraper_for_recommendation(topic)
-
-
-import inspect
-from datetime import date
-
 
 def function_to_schema(func) -> dict:
     """
@@ -390,7 +382,7 @@ async def send_initial_conversation_item(openai_ws):
             "content": [
                 {
                     "type": "input_text",
-                    "text": "Greet the user with 'Hello there! I am an AI voice assistant powered by Twilio and the OpenAI Realtime API. You can ask me for facts, jokes, or anything you can imagine. How can I help you?'"
+                    "text": "Greet the user with 'Hello there! I am an AI voice assistant for Moravelo Hotel Group where comfort meets elegance. You can ask me for facts, jokes, or anything you can imagine. How can I help you?'"
                 }
             ]
         }
