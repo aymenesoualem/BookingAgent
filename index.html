@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moroccan Hotel Reservation</title>
+
+    <!-- Link to flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+    <!-- Link to FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f1e3;
+        }
+        .top-right-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        .top-right-buttons button {
+            font-size: 14px;
+            padding: 8px 12px;
+            background-color: #f1a801;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .top-right-buttons button:hover {
+            background-color: #d17a01;
+        }
+        .hero-section {
+            background-size: cover;
+            height: 50vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+        }
+        .hero-section h1 {
+            font-size: 3.5rem;
+            margin: 0;
+            text-shadow: 3px 3px 5px rgba(0,0,0,0.5);
+        }
+        .search-form {
+            margin: -10% auto 0;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.8);  /* Semi-transparent white */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            width: 80%;
+            max-width: 1000px;
+        }
+        .search-form h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #f1a801;
+        }
+        .form-group {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        .form-group input, .form-group select {
+            padding: 12px;
+            font-size: 14px;
+            border: 1px solid #f1a801;
+            border-radius: 5px;
+            width: 100%;
+            margin: 0 10px;  /* Add some spacing between fields */
+        }
+
+        .form-label {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .action-buttons {
+            display: flex;
+            justify-content: space-between;
+        }
+        .action-buttons button {
+            width: 48%;
+            padding: 12px;
+            font-size: 14px;
+            background-color: #f1a801;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .action-buttons button:hover {
+            background-color: #d17a01;
+        }
+
+        .info-text {
+            text-align: center;
+            font-size: 14px;
+            color: #777;
+        }
+
+        /* New Circular Call Button */
+        .call-button {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .call-button button {
+            width: 70px;
+            height: 70px;
+            background-color: #f1a801;
+            color: white;
+            border-radius: 50%;
+            font-size: 30px; /* Icon size */
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s, transform 0.3s;
+        }
+        .call-button button:hover {
+            background-color: #d17a01;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Register and Sign In Buttons (Top Right) -->
+    <div class="top-right-buttons">
+        <button onclick="alert('Redirecting to registration page!')">Register</button>
+        <button onclick="alert('Redirecting to sign-in page!')">Sign In</button>
+    </div>
+
+    <!-- Hero Section (Morocco Background) -->
+    <div class="hero-section">
+        <h1>Discover the Magic of Morocco</h1>
+    </div>
+
+    <!-- Search Form for Hotel Reservation -->
+    <div class="search-form">
+        <h2>Book Your Moroccan Stay</h2>
+
+        <!-- Destination Input -->
+        <div class="form-group">
+            <input type="text" id="destination" placeholder="Where are you going? (e.g. Marrakech)" required>
+        </div>
+
+        <!-- Single Input for Check-in and Check-out Dates with Placeholder -->
+        <div class="form-group">
+                <input type="text" id="check-in-out" placeholder="Check-in & Check-out Dates" required>
+        </div>
+
+        <!-- Room and Guest Selects -->
+        <div class="form-group">
+            <select id="rooms" required>
+                <option value="">Number of Rooms</option>
+                <option value="1">1 Room</option>
+                <option value="2">2 Rooms</option>
+                <option value="3">3 Rooms</option>
+                <option value="4">4 Rooms</option>
+                <option value="5">5 Rooms</option>
+            </select>
+
+            <select id="guests" required>
+                <option value="">Number of Guests</option>
+                <option value="1">1 Guest</option>
+                <option value="2">2 Guests</option>
+                <option value="3">3 Guests</option>
+                <option value="4">4 Guests</option>
+                <option value="5">5 Guests</option>
+            </select>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button onclick="alert('Checking Availability...')">Check Availability</button>
+            <button onclick="alert('Proceeding with Reservation...')">Make a Reservation</button>
+        </div>
+
+        <!-- Circular Call Button -->
+        <div class="call-button">
+            <button onclick="openNgrokEndpoint()">
+                <i class="fas fa-phone-alt"></i> <!-- Phone icon -->
+            </button>
+        </div>
+		
+        <!-- Additional Information Text -->
+        <p class="info-text">Explore Morocco's best destinations like Marrakech, Fes, Casablanca, and the Sahara Desert.</p>
+		
+    </div>
+
+    <!-- Link to flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    
+    <script>
+        flatpickr("#check-in-out", {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            minDate: "today", // prevent past date selection
+            placeholder: "Select Check-in & Check-out Dates", // Placeholder inside the input
+            onClose: function(selectedDates) {
+                if (selectedDates.length === 2) {
+                    let checkIn = selectedDates[0].toLocaleDateString();
+                    let checkOut = selectedDates[1].toLocaleDateString();
+                }
+            }
+        });
+
+        function openNgrokEndpoint() {
+            // Replace with your actual ngrok endpoint
+            const ngrokURL = "https://your-ngrok-endpoint.ngrok.io";
+            window.open(ngrokURL, "_blank");
+        }
+    </script>
+
+</body>
+</html>
