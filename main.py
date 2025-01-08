@@ -287,6 +287,7 @@ async def handle_media_stream(websocket: WebSocket):
                                     function_name = item.get('name')
                                     arguments = json.loads(item.get('arguments', "{}"))
                                     call_id = item.get('call_id')
+
                                     print(f"Detected function call: {function_name} with arguments: {arguments}")
                                     result = await invoke_function(function_name, arguments)
                                     # Send function_call_output to OpenAI
