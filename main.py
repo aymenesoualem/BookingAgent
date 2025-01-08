@@ -3,7 +3,7 @@ import json
 import base64
 import asyncio
 from xml.etree.ElementTree import tostring
-
+from email_booking import send_email_with_banner
 import websockets
 from fastapi import FastAPI, WebSocket, Request, Form
 from fastapi.responses import JSONResponse
@@ -31,8 +31,7 @@ def book_room_function(hotel_name: str, room_number: str, customer_name: str, ch
 
     # Send confirmation SMS to the hotel
     send_sms(hotel_phone_number, confirmation_message)
-    send_email_with_banner(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date))
-
+    send_email_with_banner(hotel_name,room_number, customer_name, check_in, check_out)
     return book_room(hotel_name, room_number, customer_name, check_in, check_out)
 
 def get_available_rooms_function(
