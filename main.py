@@ -2,8 +2,10 @@ import os
 import json
 import base64
 import asyncio
+from xml.etree.ElementTree import tostring
+
 import websockets
-from fastapi import FastAPI, WebSocket, Request
+from fastapi import FastAPI, WebSocket, Request, Form
 from fastapi.responses import JSONResponse
 from fastapi.websockets import WebSocketDisconnect
 from starlette.responses import HTMLResponse
@@ -11,14 +13,25 @@ from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream
 from dotenv import load_dotenv
 from bookings import book_room, get_available_rooms
 import ssl
-import inspect
-from typing import List, Dict, Any
 from datetime import date
+from webscraper import web_scraper_for_recommendation,send_sms
 
 
 
 def book_room_function(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
     """This function books a room, call this function when the user wants to book a room."""
+
+    # Book the room (you can add your room booking logic here)
+    # Here we assume the room is successfully booked
+    booking_details = f"Booking Confirmation:\nHotel: {hotel_name}\nRoom Number: {room_number}\nCustomer: {customer_name}\nCheck-in: {check_in}\nCheck-out: {check_out}"
+
+    # Send the booking confirmation to the hotel
+    hotel_phone_number = os.getenv('HOTEL_PHONE_NUMBER')  # The hotel's phone number should be set as an environment variable
+    confirmation_message = f"Room booked successfully!\n{booking_details}"
+
+    # Send confirmation SMS to the hotel
+    send_sms(hotel_phone_number, confirmation_message)
+
     return book_room(hotel_name, room_number, customer_name, check_in, check_out)
 
 def get_available_rooms_function(
@@ -30,6 +43,12 @@ def get_available_rooms_function(
 ):
     """Fetches available rooms in a specified area for given check-in and check-out dates. Optionally filters by room type and maximum guest count."""
     return get_available_rooms(check_in, check_out, area, room_type, max_guests)
+
+
+def webscraper_for_recommendations_function(topic:str):
+    """Fetches for things to do in the hotels area, uae this function when the user asks for things to do while visiting the hotel's area."""
+    return web_scraper_for_recommendation(topic)
+
 
 import inspect
 from datetime import date
@@ -90,26 +109,9 @@ def function_to_schema(func) -> dict:
     }
 
 
-tools= [book_room_function, get_available_rooms_function]
+tools= [book_room_function, get_available_rooms_function,webscraper_for_recommendations_function]
 tool_schemas = [function_to_schema(tool) for tool in tools]
 
-async def handle_tool_invocation(function_name: str, parameters: dict):
-    """Call the relevant function based on the tool invocation."""
-
-    # Dynamically fetch the function by name and call it with the parameters
-    function_map = {
-        "book_room_function": book_room_function,
-        "get_available_rooms_function": get_available_rooms_function
-        # Add more functions here as needed
-    }
-
-    function = function_map.get(function_name)
-
-    if function:
-        # Call the function with parameters (unpack the dictionary into function arguments)
-        return await function(**parameters)
-    else:
-        return f"Unknown function requested: {function_name}"
 
 async def invoke_function(function_name, arguments):
     """
@@ -119,7 +121,8 @@ async def invoke_function(function_name, arguments):
         # Map function names to actual functions
         function_map = {
             "get_available_rooms_function": get_available_rooms_function,
-            "book_room_function": book_room_function
+            "book_room_function": book_room_function,
+            "webscraper_for_recommendations_function": webscraper_for_recommendations_function,
             # Add more functions here as needed
         }
         if function_name in function_map:
@@ -130,27 +133,6 @@ async def invoke_function(function_name, arguments):
             print(f"Function {function_name} is not recognized.")
     except Exception as e:
         print(f"Error invoking function {function_name}: {e}")
-async def process_model_output(model_response: str):
-    """Process the model output and check if it includes a tool invocation."""
-    if "function:" in model_response:
-        # Extract function name and parameters from the model response
-        try:
-            import ast
-            # Extract the function call
-            function_name_start = model_response.find("function:") + len("function:")
-            parameters_start = model_response.find("parameters:") + len("parameters:")
-
-            function_name = model_response[function_name_start:parameters_start].strip().strip('"')
-            parameters_str = model_response[parameters_start:].strip()
-            parameters = ast.literal_eval(parameters_str)  # Safely parse the parameters as a dictionary
-
-            # Invoke the tool through the handle_tool_invocation function
-            return await handle_tool_invocation(function_name, parameters)
-        except Exception as e:
-            return f"Error parsing model output: {str(e)}"
-    else:
-        # If it's not a tool invocation, return the normal response
-        return model_response
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -178,8 +160,10 @@ When a user requests a service involving a function invocation (e.g., booking a 
 - Use the hotel directory to refine recommendations based on the location or area provided by the user.
 - Provide clear, user-friendly outputs that simplify the booking process.
 
+When the user asks for places or things to do around the hotels area scrap the web using the web scraper tool to give him some recommendations.
 ### Tone and Approach
 Maintain a professional, friendly, and customer-focused tone to ensure users feel supported and valued. Emphasize the benefits of enhanced customer experience, operational efficiency, and global accessibility in all interactions.
+
 
 ### Additional Adaptability
 Adapt your approach to cater to other sectors such as healthcare (e.g., appointment scheduling) or transportation hubs (e.g., airport support). Always be mindful of cultural nuances and user context.
@@ -204,6 +188,19 @@ async def index_page():
 @app.api_route("/incoming-call", methods=["GET", "POST"])
 async def handle_incoming_call(request: Request):
     """Handle incoming call and return TwiML response to connect to Media Stream."""
+    # Get the caller's phone number from the "From" parameter
+    # Read the form data from the incoming request
+    form = await request.form()
+
+    # Extract caller's phone number (From) and other parameters
+    from_number = form.get("From")  # Caller’s phone number
+    to_number = form.get("To")  # Twilio phone number
+    call_sid = form.get("CallSid")  # Unique identifier for the call
+
+    # Log the caller's phone number for debugging purposes
+    print(f"Call received from: {from_number}")
+    print(f"Call SID: {call_sid}")
+    print(f"Twilio number: {to_number}")
     response = VoiceResponse()
     # <Say> punctuation to improve text-to-speech flow
     response.say("Please wait while we connect your call to the A. I. Booking assistant. ")
@@ -248,6 +245,7 @@ async def handle_media_stream(websocket: WebSocket):
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
+
                     if data['event'] == 'media' and openai_ws.open:
                         latest_media_timestamp = int(data['media']['timestamp'])
                         audio_append = {
@@ -299,21 +297,9 @@ async def handle_media_stream(websocket: WebSocket):
                                             "output": json.dumps(result)
                                         }
                                     }))
+                                    await openai_ws.send(json.dumps({"type": "response.create"}))
 
-                                    follow_up_answer = {
-                                        "type": "conversation.item.create",
-                                        "item": {
-                                            "type": "message",
-                                            "role": "user",
-                                            "content": [
-                                                {
-                                                    "type": "input_text",
-                                                    "text": "Follow up with the user after using the function,dont keep quiet after invoking a function,"
-                                                }
-                                            ]
-                                        }
-                                    }
-                                    await openai_ws.send(json.dumps(follow_up_answer))
+
 
                         else:
                             print("No output in response.done")
