@@ -21,18 +21,31 @@ def book_room_function(hotel_name: str, room_number: str, customer_name: str, ch
     """This function books a room, call this function when the user wants to book a room."""
     return book_room(hotel_name, room_number, customer_name, check_in, check_out)
 
-def get_available_rooms_function(check_in: date, check_out: date, room_type: str = None, max_guests: int = None):
-    """This function returns available rooms, call this function when the user wants to check for available rooms."""
-    return get_available_rooms(check_in, check_out,room_type, max_guests)
+def get_available_rooms_function(
+    check_in: date,
+    check_out: date,
+    area: str,
+    room_type: str = None,
+    max_guests: int = None
+):
+    """Fetches available rooms in a specified area for given check-in and check-out dates. Optionally filters by room type and maximum guest count."""
+    return get_available_rooms(check_in, check_out, area, room_type, max_guests)
+
+import inspect
+from datetime import date
 
 
-
-def function_to_schema(func) -> str:
+def function_to_schema(func) -> dict:
     """
-    Converts a Python function's signature into a schema format suitable for OpenAI Realtime API
-    and returns it as a JSON string.
+    Converts a Python function's signature into a JSON schema format.
+
+    Args:
+        func: The Python function to convert into a JSON schema.
+
+    Returns:
+        dict: A JSON schema describing the function.
     """
-    # Mapping Python types to OpenAI API types
+    # Map Python types to JSON Schema types
     type_map = {
         str: "string",
         int: "integer",
@@ -42,65 +55,44 @@ def function_to_schema(func) -> str:
         dict: "object",
         type(None): "null",
         date: "string",  # Represent date as a string in ISO 8601 format
-        List: "array",  # Handle List type
-        Dict: "object",  # Handle Dict type
     }
 
     try:
         signature = inspect.signature(func)
-    except ValueError as e:
-        raise ValueError(
-            f"Failed to get signature for function {func.__name__}: {str(e)}"
-        )
+    except ValueError:
+        raise ValueError(f"Failed to get signature for function {func.__name__}.")
 
-    parameters = {}
+    # Extract parameter properties
+    properties = {}
+    required = []
     for param in signature.parameters.values():
-        try:
-            param_type = type_map.get(param.annotation, "string")
-        except KeyError as e:
-            raise KeyError(
-                f"Unknown type annotation {param.annotation} for parameter {param.name}: {str(e)}"
-            )
+        annotation = param.annotation
+        param_type = type_map.get(annotation, "string")  # Default to "string" if unknown
+        properties[param.name] = {"type": param_type}
 
-        param_info = {"type": param_type}
+        # Add a format for date type
+        if annotation == date:
+            properties[param.name]["format"] = "date"
 
-        # Check if the parameter is a date type and add format
-        if param.annotation == date:
-            param_info["format"] = "date"
+        # Add to required list if no default value is provided
+        if param.default is inspect.Parameter.empty:
+            required.append(param.name)
 
-        # Handle more complex types (e.g., List, Dict)
-        if hasattr(param.annotation, "__origin__"):
-            if param.annotation.__origin__ == list:
-                param_info["items"] = {"type": "string"}  # Example for List, could be customized
-            elif param.annotation.__origin__ == dict:
-                param_info["additionalProperties"] = {"type": "string"}  # Example for Dict
-
-        parameters[param.name] = param_info
-
-    # Identify required parameters (those without a default value)
-    required = [
-        param.name
-        for param in signature.parameters.values()
-        if param.default == inspect._empty
-    ]
-
-    # Build the function schema
-    schema = {
+    return {
         "type": "function",
         "name": func.__name__,
         "description": (func.__doc__ or "").strip(),
         "parameters": {
             "type": "object",
-            "properties": parameters,
+            "properties": properties,
             "required": required,
         },
     }
 
-    # Return the schema as a JSON string
-    return json.dumps(schema, indent=2)
 
 tools= [book_room_function, get_available_rooms_function]
-tool_schemas = "[" + ",\n".join(function_to_schema(tool) for tool in tools) + "]"
+tool_schemas = [function_to_schema(tool) for tool in tools]
+
 async def handle_tool_invocation(function_name: str, parameters: dict):
     """Call the relevant function based on the tool invocation."""
 
@@ -119,7 +111,25 @@ async def handle_tool_invocation(function_name: str, parameters: dict):
     else:
         return f"Unknown function requested: {function_name}"
 
-
+async def invoke_function(function_name, arguments):
+    """
+    Dynamically invokes a function by name with the given arguments.
+    """
+    try:
+        # Map function names to actual functions
+        function_map = {
+            "get_available_rooms_function": get_available_rooms_function,
+            "book_room_function": book_room_function
+            # Add more functions here as needed
+        }
+        if function_name in function_map:
+            result = function_map[function_name](**arguments)
+            print(f"Function {function_name} invoked successfully with result: {result}")
+            return result
+        else:
+            print(f"Function {function_name} is not recognized.")
+    except Exception as e:
+        print(f"Error invoking function {function_name}: {e}")
 async def process_model_output(model_response: str):
     """Process the model output and check if it includes a tool invocation."""
     if "function:" in model_response:
@@ -146,30 +156,34 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PORT = int(os.getenv("PORT", 5050))
 system_message = """
-You are a multilingual AI assistant capable of understanding and communicating in various languages and specializing in providing seamless hotel booking and support services in Morocco through natural and engaging conversations. Your primary tasks include:
+You are a multilingual AI assistant specializing in providing seamless hotel booking and support services in Morocco through natural and engaging conversations. Your primary tasks include:
+
 1. Assisting users in searching for and booking hotels, offering personalized recommendations, managing bookings, and providing instant confirmations or modifications.
 2. Offering on-site support such as assistance with check-in/check-out, handling service requests, and providing local recommendations for attractions, dining, and transportation.
-3. Supporting multilingual interactions by communicating fluently in various languages including Arabic, French, English, and Moroccan Darija, and offering real-time translation between users and hotel staff.
+3. Supporting multilingual interactions by communicating fluently in Arabic, French, English, and Moroccan Darija, and offering real-time translation between users and hotel staff.
 4. Leveraging generative AI to deliver quick, accurate, and contextually appropriate responses.
 5. Integrating smoothly with hotel management systems to provide consistent and reliable information.
-6. Based on the user’s language, respond in the same language.
-Your tone should be professional, friendly, and customer-focused, ensuring users feel supported and valued at every step. Additionally, emphasize the benefits of enhanced customer experience, operational efficiency, and global accessibility in all interactions.
+6. Ensuring responses align with the user’s preferred language.
 
-When the user asks for a service that involves invoking a function (e.g., booking a room, retrieving available rooms), respond in the following format:
+### Hotel Directory
+You have access to the following hotels and their locations:
+- Hotel Atlas: Marrakech
+- Hotel Saadien: Casablanca
+- Hotel Imperial: Fez
+- Hotel Medina: Rabat
+- Hotel Oasis: Agadir
+- Hotel Al-Bahr: Tangier
 
-    function: "<function_name>", parameters: <parameters_as_dict>
+When a user requests a service involving a function invocation (e.g., booking a room, retrieving available rooms):
+- Use the hotel directory to refine recommendations based on the location or area provided by the user.
+- Provide clear, user-friendly outputs that simplify the booking process.
 
-For example:
-    function: "book_room_function", parameters: {"hotel_name": "Hotel XYZ", "room_number": "101", "customer_name": "John Doe", "check_in": "2025-01-10", "check_out": "2025-01-12"}
+### Tone and Approach
+Maintain a professional, friendly, and customer-focused tone to ensure users feel supported and valued. Emphasize the benefits of enhanced customer experience, operational efficiency, and global accessibility in all interactions.
 
-Once the model returns the above output, it will automatically invoke the respective function through `handle_tool_invocation` and process the user's request. If there is no tool invocation, simply respond with the appropriate text.
-
-You have access to the following functions:"""+tool_schemas+"""".
-If you ever need to invoke any function, always format it as described above, and ensure it is routed to the `handle_tool_invocation` function.
-Only specify the function call in the response.done event
-Adapt your approach to cater to other potential sectors like healthcare (e.g., appointment scheduling), transportation hubs (e.g., airports or train stations), or similar industries requiring conversational support. Be mindful of cultural nuances and the specific context of the user's needs.
+### Additional Adaptability
+Adapt your approach to cater to other sectors such as healthcare (e.g., appointment scheduling) or transportation hubs (e.g., airport support). Always be mindful of cultural nuances and user context.
 """
-
 VOICE= 'alloy'
 LOG_EVENT_TYPES = [
     'error', 'response.content.done', 'rate_limits.updated',
@@ -264,6 +278,28 @@ async def handle_media_stream(websocket: WebSocket):
                     if response['type'] in LOG_EVENT_TYPES:
                         print(f"Received event: {response['type']}", response)
 
+                    if response.get('type') == 'response.done':
+                        # Safely extract the transcript if output is available
+                        output = response['response'].get('output', [])
+                        if output:
+                            for item in output:
+                                if item.get('type') == 'function_call':
+                                    function_name = item.get('name')
+                                    arguments = json.loads(item.get('arguments', "{}"))
+                                    call_id = item.get('call_id')
+                                    print(f"Detected function call: {function_name} with arguments: {arguments}")
+                                    result = await invoke_function(function_name, arguments)
+                                    # Send function_call_output to OpenAI
+                                    await openai_ws.send(json.dumps({
+                                        "type": "conversation.item.create",
+                                        "item": {
+                                            "type": "function_call_output",
+                                            "call_id": call_id,
+                                            "output": json.dumps(result)
+                                        }
+                                    }))
+                        else:
+                            print("No output in response.done")
 
                     if response.get('type') == 'response.audio.delta' and 'delta' in response:
                         audio_payload = base64.b64encode(base64.b64decode(response['delta'])).decode('utf-8')
@@ -287,22 +323,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                         await send_mark(websocket, stream_sid)
 
-                    # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
-                    if response.get('type') == 'input_audio_buffer.speech_started':
-                        print("Speech started detected.")
-                        if last_assistant_item:
-                            print(f"Interrupting response with id: {last_assistant_item}")
-                            await handle_speech_started_event()
 
-                    if response.get('type') == 'response.done':
-                        # Safely extract the transcript if output is available
-                        output = response['response'].get('output', [])
-                        if output:
-                            message = output[0]['content'][0].get('transcript', "No transcript available")
-                            await process_model_output(message)
-                            print(f"Received response: {message}")
-                        else:
-                            print("No output in response.done")
             except Exception as e:
                 print(f"Error in send_to_twilio: {e}")
 
@@ -379,6 +400,7 @@ async def initialize_session(openai_ws):
             "instructions": system_message,
             "modalities": ["text", "audio"],
             "temperature": 0.8,
+            "tools":tool_schemas
         }
 }
 

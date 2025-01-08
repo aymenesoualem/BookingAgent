@@ -42,16 +42,26 @@ Session = sessionmaker(bind=engine)
 def get_session():
     return Session()
 
-def get_available_rooms(check_in: date, check_out: date, hotel_name: str, room_type: str = None, max_guests: int = None):
+def get_available_rooms(
+    check_in: date,
+    check_out: date,
+    area: str,
+    room_type: str = None,
+    max_guests: int = None
+):
     """
-    Get available rooms based on hotel name, check-in, check-out, optional room type, and max guests.
+    Get available rooms in hotels within a specified area, based on check-in, check-out,
+    optional room type, and max guests.
     """
     session = get_session()
     try:
-        # Find the hotel by name
-        hotel = session.query(Hotel).filter(Hotel.name == hotel_name).first()
-        if not hotel:
-            return f"Hotel '{hotel_name}' does not exist."
+        # Find hotels in the specified area
+        hotels = session.query(Hotel).filter(Hotel.area == area).all()
+        if not hotels:
+            return f"No hotels found in the area '{area}'."
+
+        # Get hotel IDs for querying rooms
+        hotel_ids = [hotel.id for hotel in hotels]
 
         # Subquery to find rooms booked during the given period
         subquery = session.query(Booking.room_id).filter(
@@ -59,9 +69,9 @@ def get_available_rooms(check_in: date, check_out: date, hotel_name: str, room_t
             Booking.check_out_date > check_in
         ).subquery()
 
-        # Query to find rooms in the specified hotel that are not in the subquery and are available
+        # Query to find rooms in the hotels in the area that are not in the subquery and are available
         query = session.query(Room).filter(
-            Room.hotel_id == hotel.id,
+            Room.hotel_id.in_(hotel_ids),
             Room.id.notin_(subquery),
             Room.is_available == True
         )
@@ -77,20 +87,25 @@ def get_available_rooms(check_in: date, check_out: date, hotel_name: str, room_t
         available_rooms = query.all()
 
         if not available_rooms:
-            return f"No rooms available for the selected dates in hotel '{hotel_name}', room type: {room_type}, and max guests: {max_guests}."
+            return f"No rooms available in the area '{area}' for the selected dates, room type: {room_type}, and max guests: {max_guests}."
 
-        # Return room details
-        return [
-            {
+        # Return room details grouped by hotel
+        result = {}
+        for room in available_rooms:
+            hotel_name = session.query(Hotel.name).filter(Hotel.id == room.hotel_id).scalar()
+            if hotel_name not in result:
+                result[hotel_name] = []
+            result[hotel_name].append({
                 "room_number": room.room_number,
                 "room_type": room.room_type,
                 "price_per_night": float(room.price_per_night),
                 "max_guests": room.max_guests,
-            }
-            for room in available_rooms
-        ]
+            })
+
+        return result
     finally:
         session.close()
+
 
 
 def book_room(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
