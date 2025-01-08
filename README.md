@@ -66,9 +66,8 @@ MORAVELO AI is built to speak your guest’s language:
 ---
 
 ### 📞 Call Handling and UI Integration
+<p style="font-size: 14px; line-height: 1.5;">As part of the <b>MORAVELO AI</b> ecosystem, our system also integrates with a user-friendly interface that manages voice calls seamlessly. When guests initiate contact through voice, the UI routes calls efficiently, ensuring a smooth connection with the AI assistant. This call interface supports multi-language communication, helping guests from around the world to get the support they need in real-time.</p>
 
-As part of the **MORAVELO AI** ecosystem, our system also integrates with a user-friendly interface that manages voice calls seamlessly.
-When guests initiate contact through voice, the UI routes calls efficiently, ensuring a smooth connection with the AI assistant. This call interface supports multi-language communication, helping guests from around the world to get the support they need in real-time.
 ---
 ## 🔧 Technical Architecture  
 
