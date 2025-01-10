@@ -128,6 +128,8 @@ class Booking(Base):
     __tablename__ = 'bookings'
     id = Column(Integer, primary_key=True)
     customer_name = Column(String(100), nullable=False)
+    customer_number = Column(String(100), nullable=False)
+    feedback = Column(String(100), nullable=True)
     check_in_date = Column(Date, nullable=False)
     check_out_date = Column(Date, nullable=False)
     room_id = Column(Integer, ForeignKey('rooms.id'), nullable=False)
@@ -207,9 +209,14 @@ def get_available_rooms(
     finally:
         session.close()
 
-
-
-def book_room(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
+def book_room(
+    hotel_name: str,
+    room_number: str,
+    customer_name: str,
+    customer_number: str,
+    check_in: date,
+    check_out: date
+):
     """
     Book a room in a specified hotel for a given period.
     """
@@ -239,13 +246,111 @@ def book_room(hotel_name: str, room_number: str, customer_name: str, check_in: d
         new_booking = Booking(
             room_id=room.id,
             customer_name=customer_name,
+            customer_number=customer_number,
             check_in_date=check_in,
             check_out_date=check_out
         )
         session.add(new_booking)
         session.commit()
 
-        return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer_name} from {check_in} to {check_out}."
+        return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer_name} ({customer_number}) from {check_in} to {check_out}."
+    finally:
+        session.close()
+
+
+# Function to delete a booking
+def delete_booking(booking_id: int):
+    """
+    Delete a booking by its ID.
+    """
+    session = get_session()
+    try:
+        booking = session.query(Booking).filter_by(id=booking_id).first()
+        if not booking:
+            return f"Booking with ID {booking_id} does not exist."
+
+        session.delete(booking)
+        session.commit()
+        return f"Booking with ID {booking_id} has been successfully deleted."
+    finally:
+        session.close()
+
+# Function to alter a booking
+def alter_booking(
+    booking_id: int,
+    new_check_in: date = None,
+    new_check_out: date = None,
+    new_customer_name: str = None,
+    new_customer_number: str = None,
+    new_feedback: str = None
+):
+    """
+    Alter an existing booking by its ID.
+    """
+    session = get_session()
+    try:
+        booking = session.query(Booking).filter_by(id=booking_id).first()
+        if not booking:
+            return f"Booking with ID {booking_id} does not exist."
+
+        # Update fields if new values are provided
+        if new_check_in:
+            booking.check_in_date = new_check_in
+        if new_check_out:
+            booking.check_out_date = new_check_out
+        if new_customer_name:
+            booking.customer_name = new_customer_name
+        if new_customer_number:
+            booking.customer_number = new_customer_number
+        if new_feedback:
+            booking.feedback = new_feedback
+
+        session.commit()
+        return f"Booking with ID {booking_id} has been successfully updated."
+    finally:
+        session.close()
+# Function to find a booking by customer number
+def find_booking_by_number(customer_number: str):
+    """
+    Find bookings by the customer's phone number.
+    """
+    session = get_session()
+    try:
+        bookings = session.query(Booking).filter_by(customer_number=customer_number).all()
+        if not bookings:
+            return f"No bookings found for customer number '{customer_number}'."
+
+        result = []
+        for booking in bookings:
+            room = session.query(Room).filter_by(id=booking.room_id).first()
+            hotel = session.query(Hotel).filter_by(id=room.hotel_id).first()
+            result.append({
+                "booking_id": booking.id,
+                "customer_name": booking.customer_name,
+                "hotel_name": hotel.name,
+                "room_number": room.room_number,
+                "check_in_date": booking.check_in_date,
+                "check_out_date": booking.check_out_date,
+                "feedback": booking.feedback
+            })
+        return result
+    finally:
+        session.close()
+
+# Function to add feedback to a specific booking
+def add_feedback(booking_id: int, feedback: str):
+    """
+    Add or update feedback for a specific booking by its ID.
+    """
+    session = get_session()
+    try:
+        booking = session.query(Booking).filter_by(id=booking_id).first()
+        if not booking:
+            return f"Booking with ID {booking_id} does not exist."
+
+        booking.feedback = feedback
+        session.commit()
+        return f"Feedback added to booking with ID {booking_id}."
     finally:
         session.close()
 

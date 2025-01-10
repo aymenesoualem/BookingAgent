@@ -34,9 +34,11 @@ def create_tables():
 
     CREATE TABLE IF NOT EXISTS bookings (
         id SERIAL PRIMARY KEY,
+        customer_number VARCHAR(100) NOT NULL,
         customer_name VARCHAR(100) NOT NULL,
         check_in_date DATE NOT NULL,
         check_out_date DATE NOT NULL,
+        feedback TEXT, -- Added column for feedback
         room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
