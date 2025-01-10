@@ -3,6 +3,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.header import Header
+from http.client import responses
+
 from templates.email_template import BOOKING_EMAIL_TEMPLATE
 from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Numeric, Boolean, TIMESTAMP, func
 from sqlalchemy.ext.declarative import declarative_base
@@ -79,13 +81,15 @@ def send_email_with_banner(hotel_name, room_number, customer_name, check_in, che
         msg.attach(MIMEText(email_body, 'html', 'utf-8'))
 
         # Attach banner image
+        banner_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'banner.jpg')
         try:
-            with open('../assets/banner.jpg', 'rb') as img:
+            with open(banner_path, 'rb') as img:
                 mime_image = MIMEImage(img.read())
                 mime_image.add_header('Content-ID', '<BookingBanner>')
                 msg.attach(mime_image)
         except FileNotFoundError:
-            return "Erreur : Le fichier banner.jpg est introuvable."
+            return {"status": "error", "message": "The file banner.jpg was not found."}
+
 
         # Send the email
         with smtplib.SMTP('smtp.gmail.com', 587, timeout=60) as server:
@@ -244,3 +248,8 @@ def book_room(hotel_name: str, room_number: str, customer_name: str, check_in: d
         return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer_name} from {check_in} to {check_out}."
     finally:
         session.close()
+
+
+def main():
+    response =send_email_with_banner("test","test","test","test","test")
+    print( response)
