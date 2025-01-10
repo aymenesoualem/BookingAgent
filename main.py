@@ -1,16 +1,19 @@
 import os
-
+from datetime import date
+from typing import Optional, List
+import psycopg2
 from fastapi import FastAPI, WebSocket, Request, HTTPException
+from fastapi.params import Depends
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session, joinedload
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
 from agents.agent import  handle_call
-from tools import Booking, Room
-
+from outboundcall import make_call
 from tools.functioncalling import invoke_function, book_room_function, get_available_rooms_function, \
     webscraper_for_recommendations_function, function_to_schema, delete_booking_function, alter_booking_function, \
     find_booking_by_number_function, add_feedback_function
@@ -20,42 +23,94 @@ PORT = int(os.getenv("PORT", 5050))
 
 SHOW_TIMING_MATH = False
 app = FastAPI()
+class Booking(BaseModel):
+    id: str
+    customer_name: str
+    room_number: str
+    check_in_date: date
+    check_out_date: date
+    phone_number: str
+    feedback: str
 
-# Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (replace "*" with your frontend URL in production)
-    allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
-)
+    class Config:
+        from_attributes = True
 
+
+
+app = FastAPI()
+
+# Database configuration
 DATABASE_URL = "postgresql://agent:booking@localhost:5432/Hotel_db"
-
-# Create engine and session
 engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
-@app.get("/bookings", response_model=list[dict])
-def get_bookings(db: Session):
-    try:
-        # Fetch all bookings with related room information
-        bookings = db.query(Booking).join(Room).all()
-        
-        # Format the data to include customer name, room number, check-in, and check-out
-        booking_data = []
-        for booking in bookings:
-            booking_data.append({
-                "customer_name": booking.customer_name,
-                "room_number": booking.room.room_number,
-                "check_in_date": booking.check_in_date.isoformat(),
-                "check_out_date": booking.check_out_date.isoformat(),
-                "phone_number": "123-456-7890"  # Replace with actual phone number if available
-            })
-        
-        return booking_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
+
+# Dependency to get the DB session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+from fastapi.logger import logger
+
+
+from typing import List
+
+# Database connection function using psycopg2
+def get_db_connection():
+    try:
+        connection = psycopg2.connect(DATABASE_URL)
+        return connection
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection error: {e}")
+
+@app.get("/bookings", response_model=List[Booking])
+def get_bookings():
+    try:
+        # Establish database connection
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # Query to join bookings and rooms
+        query = """
+        SELECT b.id,b.customer_name, r.room_number, b.check_in_date, b.check_out_date, b.customer_number,b.feedback AS phone_number
+        FROM bookings b
+        JOIN rooms r ON b.room_id = r.id;
+        """
+
+        # Execute query
+        cursor.execute(query)
+        result = cursor.fetchall()
+
+        # Process the data
+        bookings = []
+        for row in result:
+            # Map result to a dictionary that matches the structure of the Booking model
+            bookings.append({
+                "id": row[0],
+                "customer_name": row[1],
+                "room_number": row[2],
+                "check_in_date": row[3].strftime('%Y-%m-%d'),  # Formatting the date to string
+                "check_out_date": row[4].strftime('%Y-%m-%d'),  # Formatting the date to string
+                "phone_number": row[5] , # Using the hardcoded phone number
+                "feedback": row[6]
+            })
+
+        # Close the cursor and connection
+        cursor.close()
+        connection.close()
+
+        if not bookings:
+            raise HTTPException(status_code=404, detail="No bookings found!")
+
+        # Return JSON response with the data
+        return JSONResponse(content=bookings)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching bookings: {e}")
 @app.get("/",response_class=JSONResponse)
 async def index_page():
     return {"message":"Server is running"}
@@ -137,8 +192,8 @@ async def handle_media_stream(websocket: WebSocket,customer_number: str):
 
     await handle_call(websocket,system_message,initial_message,tool_schemas)
 
-@app.websocket("/media-stream-outbound/{customer_number}")
-async def handle_media_stream_outbound(websocket: WebSocket ,customer_number: str):
+@app.websocket("/media-stream/{customer_number}")
+async def handle_media_stream(websocket: WebSocket ,customer_number: str):
     system_message = f"""
     You are a multilingual AI assistant specializing in collecting and storing customer feedback for the Moravelo Hotel Group. Your primary tasks include:
 
@@ -183,8 +238,21 @@ async def handle_media_stream_outbound(websocket: WebSocket ,customer_number: st
     tool_schemas = [function_to_schema(tool) for tool in tools]
 
     await handle_call(websocket,system_message,initial_message,tool_schemas)
+# Example model for request body
+class OutboundCallRequest(BaseModel):
+    phone_number: str
 
 
+# POST endpoint for initiating an outbound call
+@app.get("/outbound-call/{phone_number}")
+async def get_outbound_call(phone_number: str):
+    try:
+        response = await make_call(phone_number)
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)

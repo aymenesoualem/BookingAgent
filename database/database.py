@@ -71,36 +71,43 @@ def populate_rooms():
     """
     sample_rooms = [
         # Rooms for Hotel Atlas
-        ('101', 'Single', True, 60.00, 1, 1),
-        ('102', 'Double', True, 100.00, 2, 1),
-        ('103', 'Suite', True, 180.00, 4, 1),
+        ('1011', 'Single', True, 60.00, 1, 1),
+        ('1012', 'Double', True, 100.00, 2, 1),
+        ('1031', 'Suite', True, 180.00, 4, 1),
+        ('1041', 'Deluxe', True, 250.00, 5, 1),
 
         # Rooms for Hotel Saadien
-        ('201', 'Single', True, 65.00, 1, 2),
-        ('202', 'Double', True, 110.00, 2, 2),
-        ('203', 'Suite', True, 190.00, 4, 2),
+        ('2011', 'Single', True, 65.00, 1, 2),
+        ('2021', 'Double', True, 110.00, 2, 2),
+        ('2031', 'Suite', True, 190.00, 4, 2),
+        ('2041', 'Deluxe', True, 240.00, 5, 2),
 
         # Rooms for Hotel Imperial
-        ('301', 'Single', True, 55.00, 1, 3),
-        ('302', 'Double', True, 90.00, 2, 3),
-        ('303', 'Suite', True, 170.00, 4, 3),
+        ('3011', 'Single', True, 55.00, 1, 3),
+        ('3021', 'Double', True, 90.00, 2, 3),
+        ('3031', 'Suite', True, 170.00, 4, 3),
+        ('3041', 'Deluxe', True, 230.00, 5, 3),
 
         # Rooms for Hotel Medina
-        ('401', 'Single', True, 70.00, 1, 4),
-        ('402', 'Double', True, 120.00, 2, 4),
-        ('403', 'Suite', True, 200.00, 4, 4),
+        ('4011', 'Single', True, 70.00, 1, 4),
+        ('4021', 'Double', True, 120.00, 2, 4),
+        ('4031', 'Suite', True, 200.00, 4, 4),
+        ('4041', 'Deluxe', True, 280.00, 5, 4),
 
         # Rooms for Hotel Oasis
-        ('501', 'Single', True, 50.00, 1, 5),
-        ('502', 'Double', True, 85.00, 2, 5),
-        ('503', 'Suite', True, 150.00, 4, 5),
+        ('5011', 'Single', True, 50.00, 1, 5),
+        ('5021', 'Double', True, 85.00, 2, 5),
+        ('5031', 'Suite', True, 150.00, 4, 5),
+        ('5041', 'Deluxe', True, 220.00, 5, 5),
 
         # Rooms for Hotel Al-Bahr
-        ('601', 'Single', True, 75.00, 1, 6),
-        ('602', 'Double', True, 130.00, 2, 6),
-        ('603', 'Suite', True, 220.00, 4, 6),
+        ('6011', 'Single', True, 75.00, 1, 6),
+        ('6021', 'Double', True, 130.00, 2, 6),
+        ('6031', 'Suite', True, 220.00, 4, 6),
+        ('6041', 'Deluxe', True, 300.00, 5, 6),
     ]
     return sample_rooms_query, sample_rooms
+
 
 def create_and_populate_tables():
     try:
@@ -131,6 +138,12 @@ def create_and_populate_tables():
         room_query, rooms_data = populate_rooms()
         cursor.executemany(room_query, rooms_data)
         print("Rooms data inserted successfully.")
+
+        # Insert sample bookings data
+        print("Inserting sample data into bookings table...")
+        booking_query, bookings_data = populate_bookings()
+        cursor.executemany(booking_query, bookings_data)
+        print("Bookings data inserted successfully.")
 
     except DuplicateTable as dt_err:
         print("Table already exists:", dt_err)

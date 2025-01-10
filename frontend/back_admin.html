@@ -124,14 +124,16 @@
 
     <script>
         // Fetch bookings from the backend
-        async function fetchBookings() {
+async function fetchBookings() {
     try {
         // Fetch bookings from the FastAPI backend
-        const response = await fetch('http://localhost:5050/bookings');  // Updated URL
+        const response = await fetch('https://actually-liked-doe.ngrok-free.app/bookings');  // Updated URL
         if (!response.ok) {
             throw new Error('Failed to fetch bookings');
         }
-        const bookings = await response.json();  // Parse the JSON response
+
+        // Parse the response as JSON
+        const bookings = await response.json();
 
         const tableBody = document.getElementById('booking-table-body');
         tableBody.innerHTML = '';  // Clear existing rows
@@ -146,7 +148,7 @@
                 <td>${booking.check_out_date}</td>
                 <td class="centered-button">
                     <button class="call-button" onclick="callCustomer('${booking.phone_number}')">
-                        <i class="fas fa-phone-alt"></i> 
+                        <i class="fas fa-phone-alt"></i>
                     </button>
                 </td>
             `;
@@ -157,6 +159,15 @@
         alert('Failed to load bookings. Please try again later.');
     }
 }
+
+// Call customer function (unchanged)
+function callCustomer(phoneNumber) {
+    alert(`Calling ${phoneNumber} for feedback...`);
+    // Integrate Twilio or your backend API to trigger the call
+}
+
+// Initialize bookings when the page loads
+document.addEventListener('DOMContentLoaded', fetchBookings);
 
         // Call customer function (unchanged)
         function callCustomer(phoneNumber) {

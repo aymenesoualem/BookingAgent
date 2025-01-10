@@ -136,6 +136,8 @@ class Booking(Base):
     created_at = Column(TIMESTAMP, default=func.now())
     room = relationship('Room')
 
+    class Config:
+        orm_mode = True
 DATABASE_URL = "postgresql://agent:booking@localhost:5432/Hotel_db"
 
 # Create engine and session
@@ -146,8 +148,8 @@ def get_session():
     return Session()
 
 def get_available_rooms(
-    check_in: date,
-    check_out: date,
+    check_in: date = None,
+    check_out: date = None,
     area: str,
     room_type: str = None,
     max_guests: int = None
@@ -166,18 +168,20 @@ def get_available_rooms(
         # Get hotel IDs for querying rooms
         hotel_ids = [hotel.id for hotel in hotels]
 
-        # Subquery to find rooms booked during the given period
-        subquery = session.query(Booking.room_id).filter(
-            Booking.check_in_date < check_out,
-            Booking.check_out_date > check_in
-        ).subquery()
-
-        # Query to find rooms in the hotels in the area that are not in the subquery and are available
+        # Create the query for available rooms
         query = session.query(Room).filter(
             Room.hotel_id.in_(hotel_ids),
-            Room.id.notin_(subquery),
             Room.is_available == True
         )
+
+        # If check_in and check_out are provided, filter by the booked rooms during that period
+        if check_in and check_out:
+            # Subquery to find rooms booked during the given period
+            subquery = session.query(Booking.room_id).filter(
+                Booking.check_in_date < check_out,
+                Booking.check_out_date > check_in
+            ).subquery()
+            query = query.filter(Room.id.notin_(subquery))
 
         # Filter by room type if provided
         if room_type:
@@ -190,7 +194,7 @@ def get_available_rooms(
         available_rooms = query.all()
 
         if not available_rooms:
-            return f"No rooms available in the area '{area}' for the selected dates, room type: {room_type}, and max guests: {max_guests}."
+            return f"No rooms available in the area '{area}' for the selected filters."
 
         # Return room details grouped by hotel
         result = {}
@@ -208,6 +212,7 @@ def get_available_rooms(
         return result
     finally:
         session.close()
+
 
 def book_room(
     hotel_name: str,
@@ -356,5 +361,11 @@ def add_feedback(booking_id: int, feedback: str):
 
 
 def main():
-    response =send_email_with_banner("test","test","test","test","test")
-    print( response)
+    book_room(
+        hotel_name="Hotel Atlas",
+        room_number="1012",
+        customer_name="Ayoub Mounir",
+        customer_number="+212673375314",
+        check_in=date(2025, 1, 10),
+        check_out=date(2025, 1, 15)
+    )

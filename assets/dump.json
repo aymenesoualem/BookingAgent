@@ -1,0 +1,16 @@
+[
+    {
+        "customer_name": "Aymene Soualem",
+        "room_number": "1011",
+        "check_in_date": "2025-01-10",
+        "check_out_date": "2025-01-15",
+        "phone_number": "123-456-7890"
+    },
+    {
+        "customer_name": "Ayoub Mounir",
+        "room_number": "1012",
+        "check_in_date": "2025-01-10",
+        "check_out_date": "2025-01-15",
+        "phone_number": "123-456-7890"
+    }
+]
