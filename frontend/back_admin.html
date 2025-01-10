@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Booking Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f1e3;
+            color: #342A28;
+        }
+
+        .logo-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+        }
+
+        .logo-container img {
+            width: 150px;
+            height: auto;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            font-size: 14px;
+        }
+
+        .footer p {
+            margin: 0;
+            color: #666;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 70px;
+            margin-bottom: 20px;
+            color: #342A28;
+        }
+
+        table {
+            width: 90%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background-color: #342A28;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tr:hover {
+            background-color: #f4d9b6;
+        }
+
+        .call-button {
+            background-color: #342A28;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .call-button i {
+            margin-right: 8px;
+        }
+
+        .call-button:hover {
+            background-color: #d17a01;
+        }
+
+        .centered-button {
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Logo Section -->
+    <div class="logo-container">
+        <img src="../assets/banner.jpg" alt="Hotel Logo">
+    </div>
+
+    <h1>Booking Management</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Customer Name</th>
+                <th>Room Number</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="booking-table-body">
+            <!-- Dynamic rows populated by JavaScript -->
+        </tbody>
+    </table>
+
+    <script>
+        // Fetch bookings from the backend
+        async function fetchBookings() {
+    try {
+        // Fetch bookings from the FastAPI backend
+        const response = await fetch('http://localhost:5050/bookings');  // Updated URL
+        if (!response.ok) {
+            throw new Error('Failed to fetch bookings');
+        }
+        const bookings = await response.json();  // Parse the JSON response
+
+        const tableBody = document.getElementById('booking-table-body');
+        tableBody.innerHTML = '';  // Clear existing rows
+
+        // Populate the table with the fetched bookings
+        bookings.forEach(booking => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${booking.customer_name}</td>
+                <td>${booking.room_number}</td>
+                <td>${booking.check_in_date}</td>
+                <td>${booking.check_out_date}</td>
+                <td class="centered-button">
+                    <button class="call-button" onclick="callCustomer('${booking.phone_number}')">
+                        <i class="fas fa-phone-alt"></i> 
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error fetching bookings:', error);
+        alert('Failed to load bookings. Please try again later.');
+    }
+}
+
+        // Call customer function (unchanged)
+        function callCustomer(phoneNumber) {
+            alert(`Calling ${phoneNumber} for feedback...`);
+            // Integrate Twilio or your backend API to trigger the call
+        }
+
+        // Initialize bookings when the page loads
+        document.addEventListener('DOMContentLoaded', fetchBookings);
+    </script>
+
+    <!-- Footer Section -->
+    <div class="footer">
+        <p>&copy; 2025 Groupe MORAVELO. Tous droits réservés.</p>
+    </div>
+
+    <!-- Link to FontAwesome for phone icon -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+</body>
+</html>

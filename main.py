@@ -9,9 +9,11 @@ from fastapi.websockets import WebSocketDisconnect
 from starlette.responses import HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 from agents.agent import initialize_session, LOG_EVENT_TYPES
 import ssl
+from database import SessionLocal  # Assuming you have a database setup
 
 
 from tools.functioncalling import invoke_function
@@ -23,8 +25,39 @@ PORT = int(os.getenv("PORT", 5050))
 SHOW_TIMING_MATH = False
 app = FastAPI()
 
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (replace "*" with your frontend URL in production)
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
+
+
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set")
+
+@app.get("/bookings", response_model=list[dict])
+def get_bookings(db: Session = Depends(get_db)):
+    try:
+        # Fetch all bookings with related room information
+        bookings = db.query(Booking).join(Room).all()
+        
+        # Format the data to include customer name, room number, check-in, and check-out
+        booking_data = []
+        for booking in bookings:
+            booking_data.append({
+                "customer_name": booking.customer_name,
+                "room_number": booking.room.room_number,
+                "check_in_date": booking.check_in_date.isoformat(),
+                "check_out_date": booking.check_out_date.isoformat(),
+                "phone_number": "123-456-7890"  # Replace with actual phone number if available
+            })
+        
+        return booking_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/",response_class=JSONResponse)
 async def index_page():
