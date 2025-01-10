@@ -1,30 +1,32 @@
 import os
-import json
-import base64
-import asyncio
-import websockets
+
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.responses import JSONResponse
-from fastapi.websockets import WebSocketDisconnect
 from starlette.responses import HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
+<<<<<<< HEAD
 from agents.agent import initialize_session, LOG_EVENT_TYPES
 import ssl
 from database import SessionLocal  # Assuming you have a database setup
+=======
+from agents.agent import  handle_call
+>>>>>>> 8c6ce5cc3462262f5e9626c1be74ff63952d242e
 
 
-from tools.functioncalling import invoke_function
+from tools.functioncalling import invoke_function, book_room_function, get_available_rooms_function, \
+    webscraper_for_recommendations_function, function_to_schema, delete_booking_function, alter_booking_function, \
+    find_booking_by_number_function, add_feedback_function
 
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PORT = int(os.getenv("PORT", 5050))
 
 SHOW_TIMING_MATH = False
 app = FastAPI()
 
+<<<<<<< HEAD
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +39,8 @@ app.add_middleware(
 
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set")
+=======
+>>>>>>> 8c6ce5cc3462262f5e9626c1be74ff63952d242e
 
 @app.get("/bookings", response_model=list[dict])
 def get_bookings(db: Session = Depends(get_db)):
@@ -86,19 +90,13 @@ async def handle_incoming_call(request: Request):
     response.say("O.K. you can start talking!")
     host = request.url.hostname
     connect = Connect()
-    connect.stream(url=f'wss://{host}/media-stream')
+    connect.stream(url=f'wss://{host}/media-stream/{from_number}')
     response.append(connect)
     return HTMLResponse(content=str(response), media_type="application/xml")
 
 
-@app.websocket("/media-stream")
-async def handle_media_stream(websocket: WebSocket):
-    """Handle WebSocket connections between Twilio and OpenAI."""
-    print("Client connected")
-    await websocket.accept()
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
+@app.websocket("/media-stream/{customer_number}")
+async def handle_media_stream(websocket: WebSocket,customer_number: str):
     system_message = """
     You are a multilingual AI assistant specializing in providing seamless hotel booking and support services in Morocco through natural and engaging conversations. Your primary tasks include:
 
@@ -133,168 +131,65 @@ async def handle_media_stream(websocket: WebSocket):
 
     ### Additional Adaptability
     Adapt your approach to cater to other sectors such as healthcare (e.g., appointment scheduling) or transportation hubs (e.g., airport support). Always be mindful of cultural nuances and user context.
-    """
+
+    ### Customer Number
+    The customer's number for this session is: """+customer_number
+
     initial_message = "Greet the user with 'Hello there! I am an AI voice assistant for Moravelo Hotel Group where comfort meets elegance.' repeat the message in French then in Arabic."
+    tools = [book_room_function, get_available_rooms_function,
+             webscraper_for_recommendations_function,delete_booking_function,alter_booking_function,
+             find_booking_by_number_function
+             ]
+    tool_schemas = [function_to_schema(tool) for tool in tools]
 
-    async with websockets.connect(
-            'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
-            ssl=ssl_context,
-            extra_headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "OpenAI-Beta": "realtime=v1"
-            }
-    ) as openai_ws:
-        await initialize_session(openai_ws,system_message=system_message,initial_message=initial_message)
+    await handle_call(websocket,system_message,initial_message,tool_schemas)
 
-        # Connection specific state
-        stream_sid = None
-        latest_media_timestamp = 0
-        last_assistant_item = None
-        mark_queue = []
-        response_start_timestamp_twilio = None
+@app.websocket("/media-stream-outbound/{customer_number}")
+async def handle_media_stream_outbound(websocket: WebSocket ,customer_number: str):
+    system_message = f"""
+    You are a multilingual AI assistant specializing in collecting and storing customer feedback for the Moravelo Hotel Group. Your primary tasks include:
 
+    1. **Gathering Feedback:** Prompt customers to provide detailed feedback about their experience with the hotel services, including room quality, staff assistance, cleanliness, amenities, and overall satisfaction.
+    2. **Processing Feedback:** Categorize feedback into relevant sections (e.g., positive, negative, suggestions) for easier analysis.
+    3. **Storing Feedback:** Use the `get_customer_feedback` function to save feedback into the database. Ensure feedback is properly formatted and tagged with metadata such as the hotel name, customer name, and feedback date.
+    4. **Encouraging Engagement:** Maintain a friendly and professional tone to encourage customers to share honest and constructive feedback.
+    5. **Supporting Multilingual Interactions:** Communicate fluently in Arabic, French, English, and Moroccan Darija, ensuring customers can provide feedback in their preferred language.
 
-        async def receive_from_twilio():
-            """Receive audio data from Twilio and send it to the OpenAI Realtime API."""
-            nonlocal stream_sid, latest_media_timestamp
-            try:
-                async for message in websocket.iter_text():
-                    data = json.loads(message)
+    ### Customer Interaction
+    - At the start of each feedback session, greet the customer warmly and introduce yourself, explaining the purpose of the interaction. For example:
+      "Hello! I am here to collect your feedback about your recent experience at one of our hotels. Your thoughts help us improve our services. Shall we start?"
+      Repeat the message in French and then in Arabic.
 
-                    if data['event'] == 'media' and openai_ws.open:
-                        latest_media_timestamp = int(data['media']['timestamp'])
-                        audio_append = {
-                            "type": "input_audio_buffer.append",
-                            "audio": data['media']['payload']
-                        }
-                        await openai_ws.send(json.dumps(audio_append))
-                    elif data['event'] == 'start':
-                        stream_sid = data['start']['streamSid']
-                        print(f"Incoming stream has started {stream_sid}")
-                        response_start_timestamp_twilio = None
-                        latest_media_timestamp = 0
-                        last_assistant_item = None
-                    elif data['event'] == 'mark':
-                        if mark_queue:
-                            mark_queue.pop(0)
-            except WebSocketDisconnect:
-                print("Client disconnected.")
-                if openai_ws.open:
-                    await openai_ws.close()
+    ### Feedback Process
+    - Begin by asking for the customer's name and the name of the hotel they stayed at.
+    - Ask targeted questions such as:
+      - "What did you like most about your stay?"
+      - "Is there anything you think we could improve?"
+      - "How would you rate your overall experience out of 10?"
+    - Summarize the feedback at the end of the session and confirm it with the customer before storing it in the database.
 
-        async def send_to_twilio():
-            """Receive events from the OpenAI Realtime API, send audio back to Twilio."""
-            nonlocal stream_sid, last_assistant_item, response_start_timestamp_twilio
-            try:
-                async for openai_message in openai_ws:
-                    response = json.loads(openai_message)
-                    if response['type'] in LOG_EVENT_TYPES:
-                        print(f"Received event: {response['type']}", response)
+    ### Feedback Storage
+    - Use the `get_customer_feedback` function to save the feedback. Ensure each entry includes:
+      - Customer's name
+      - Hotel name
+      - Feedback text
+      - Date and time of the feedback
+      - Language of the feedback (if possible)
 
-                    if response.get('type') == 'response.done':
-                        # Safely extract the transcript if output is available
-                        output = response['response'].get('output', [])
-                        if output:
-                            for item in output:
-                                if item.get('type') == 'function_call':
-                                    function_name = item.get('name')
-                                    arguments = json.loads(item.get('arguments', "{}"))
-                                    call_id = item.get('call_id')
+    ### Tone and Approach
+    - Keep the conversation friendly, empathetic, and customer-focused to ensure users feel comfortable sharing their thoughts.
+    - Handle negative feedback professionally, acknowledging the customer's concerns and assuring them that their input is valued.
 
-                                    print(f"Detected function call: {function_name} with arguments: {arguments}")
-                                    result = await invoke_function(function_name, arguments)
-                                    # Send function_call_output to OpenAI
-                                    await openai_ws.send(json.dumps({
-                                        "type": "conversation.item.create",
-                                        "item": {
-                                            "type": "function_call_output",
-                                            "call_id": call_id,
-                                            "output": json.dumps(result)
-                                        }
-                                    }))
-                                    await openai_ws.send(json.dumps({"type": "response.create"}))
+    ### Additional Adaptability
+    Adapt your feedback collection approach based on the customer's responses and preferences. Ensure that all interactions are culturally sensitive and personalized to the customer's experience.
 
+    ### Customer Number
+    The customer's number for this session is: """+customer_number
+    initial_message = "Greet the user with 'Hello there! I am an AI voice assistant for Moravelo Hotel Group where comfort meets elegance.' repeat the message in French then in Arabic."
+    tools = [find_booking_by_number_function,webscraper_for_recommendations_function,add_feedback_function]
+    tool_schemas = [function_to_schema(tool) for tool in tools]
 
-
-                        else:
-                            print("No output in response.done")
-
-                    if response.get('type') == 'response.audio.delta' and 'delta' in response:
-                        audio_payload = base64.b64encode(base64.b64decode(response['delta'])).decode('utf-8')
-                        audio_delta = {
-                            "event": "media",
-                            "streamSid": stream_sid,
-                            "media": {
-                                "payload": audio_payload
-                            }
-                        }
-                        await websocket.send_json(audio_delta)
-
-                        if response_start_timestamp_twilio is None:
-                            response_start_timestamp_twilio = latest_media_timestamp
-                            if SHOW_TIMING_MATH:
-                                print(f"Setting start timestamp for new response: {response_start_timestamp_twilio}ms")
-
-                        # Update last_assistant_item safely
-                        if response.get('item_id'):
-                            last_assistant_item = response['item_id']
-
-                        await send_mark(websocket, stream_sid)
-
-                    # Trigger an interruption. Your use case might work better using `input_audio_buffer.speech_stopped`, or combining the two.
-                    if response.get('type') == 'input_audio_buffer.speech_started':
-                        print("Speech started detected.")
-                        if last_assistant_item:
-                            print(f"Interrupting response with id: {last_assistant_item}")
-                            await handle_speech_started_event()
-
-
-            except Exception as e:
-                print(f"Error in send_to_twilio: {e}")
-
-        async def handle_speech_started_event():
-            """Handle interruption when the caller's speech starts."""
-            nonlocal response_start_timestamp_twilio, last_assistant_item
-            print("Handling speech started event.")
-            if mark_queue and response_start_timestamp_twilio is not None:
-                elapsed_time = latest_media_timestamp - response_start_timestamp_twilio
-                if SHOW_TIMING_MATH:
-                    print(
-                        f"Calculating elapsed time for truncation: {latest_media_timestamp} - {response_start_timestamp_twilio} = {elapsed_time}ms")
-
-                if last_assistant_item:
-                    if SHOW_TIMING_MATH:
-                        print(f"Truncating item with ID: {last_assistant_item}, Truncated at: {elapsed_time}ms")
-
-                    truncate_event = {
-                        "type": "conversation.item.truncate",
-                        "item_id": last_assistant_item,
-                        "content_index": 0,
-                        "audio_end_ms": elapsed_time
-                    }
-                    await openai_ws.send(json.dumps(truncate_event))
-
-                await websocket.send_json({
-                    "event": "clear",
-                    "streamSid": stream_sid
-                })
-
-                mark_queue.clear()
-                last_assistant_item = None
-                response_start_timestamp_twilio = None
-
-        async def send_mark(connection, stream_sid):
-            if stream_sid:
-                mark_event = {
-                    "event": "mark",
-                    "streamSid": stream_sid,
-                    "mark": {"name": "responsePart"}
-                }
-                await connection.send_json(mark_event)
-                mark_queue.append('responsePart')
-
-        await asyncio.gather(receive_from_twilio(), send_to_twilio())
-
+    await handle_call(websocket,system_message,initial_message,tool_schemas)
 
 
 if __name__ == "__main__":

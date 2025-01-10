@@ -3,9 +3,10 @@ import os
 from datetime import date
 
 from tools import send_sms, send_email_with_banner, book_room, get_available_rooms, web_scraper_for_recommendation
+from tools.tools import delete_booking, alter_booking, find_booking_by_number, add_feedback
 
 
-def book_room_function(hotel_name: str, room_number: str, customer_name: str, check_in: date, check_out: date):
+def book_room_function(hotel_name: str, room_number: str, customer_name: str,customer_number: str, check_in: date, check_out: date):
     """This function books a room, call this function when the user wants to book a room."""
 
     # Book the room (you can add your room booking logic here)
@@ -19,7 +20,7 @@ def book_room_function(hotel_name: str, room_number: str, customer_name: str, ch
     # Send confirmation SMS to the hotel
     send_sms(hotel_phone_number, confirmation_message)
     send_email_with_banner(hotel_name,room_number, customer_name, check_in, check_out)
-    return book_room(hotel_name, room_number, customer_name, check_in, check_out)
+    return book_room(hotel_name, room_number, customer_name,customer_number, check_in, check_out)
 
 def get_available_rooms_function(
     check_in: date,
@@ -30,7 +31,35 @@ def get_available_rooms_function(
 ):
     """Fetches available rooms in a specified area for given check-in and check-out dates. Optionally filters by room type and maximum guest count."""
     return get_available_rooms(check_in, check_out, area, room_type, max_guests)
+def delete_booking_function(booking_id: int):
+    """
+    Deletes a booking record using the booking ID.
+    """
+    return delete_booking(booking_id)
 
+def alter_booking_function(
+    booking_id: int,
+    new_check_in: date = None,
+    new_check_out: date = None,
+    new_customer_name: str = None,
+    new_customer_number: str = None,
+):
+    """
+    Modifies an existing booking with updated details such as dates or customer information.
+    """
+    return alter_booking(booking_id, new_check_in, new_check_out, new_customer_name, new_customer_number)
+
+def find_booking_by_number_function(customer_number: str):
+    """
+    Searches for a booking using the customer's phone number.
+    """
+    return find_booking_by_number(customer_number)
+
+def add_feedback_function(booking_id: int, feedback: str):
+    """
+    Adds feedback for a specific booking.
+    """
+    return add_feedback(booking_id, feedback)
 
 def webscraper_for_recommendations_function(topic:str):
     """Fetches for things to do in the hotels area, uae this function when the user asks for things to do while visiting the hotel's area."""
