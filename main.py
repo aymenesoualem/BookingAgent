@@ -1,20 +1,15 @@
 import os
 
-from fastapi import FastAPI, WebSocket, Request
+from fastapi import FastAPI, WebSocket, Request, HTTPException
 from fastapi.responses import JSONResponse
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from starlette.responses import HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-
-<<<<<<< HEAD
-from agents.agent import initialize_session, LOG_EVENT_TYPES
-import ssl
-from database import SessionLocal  # Assuming you have a database setup
-=======
 from agents.agent import  handle_call
->>>>>>> 8c6ce5cc3462262f5e9626c1be74ff63952d242e
-
+from tools import Booking, Room
 
 from tools.functioncalling import invoke_function, book_room_function, get_available_rooms_function, \
     webscraper_for_recommendations_function, function_to_schema, delete_booking_function, alter_booking_function, \
@@ -26,7 +21,6 @@ PORT = int(os.getenv("PORT", 5050))
 SHOW_TIMING_MATH = False
 app = FastAPI()
 
-<<<<<<< HEAD
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
@@ -36,14 +30,13 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+DATABASE_URL = "postgresql://agent:booking@localhost:5432/Hotel_db"
 
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not set")
-=======
->>>>>>> 8c6ce5cc3462262f5e9626c1be74ff63952d242e
-
+# Create engine and session
+engine = create_engine(DATABASE_URL)
+Session = sessionmaker(bind=engine)
 @app.get("/bookings", response_model=list[dict])
-def get_bookings(db: Session = Depends(get_db)):
+def get_bookings(db: Session):
     try:
         # Fetch all bookings with related room information
         bookings = db.query(Booking).join(Room).all()

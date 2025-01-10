@@ -1,11 +1,6 @@
-import os
-import json
-import base64
 import asyncio
-import argparse
-from fastapi import FastAPI, WebSocket, BackgroundTasks
-from fastapi.responses import JSONResponse
-from fastapi.websockets import WebSocketDisconnect
+import os
+
 from twilio.rest import Client
 import websockets
 from dotenv import load_dotenv
@@ -75,5 +70,6 @@ async def make_call(phone_number_to_call: str):
 async def log_call_sid(call_sid):
     """Log the call SID."""
     print(f"Call started with SID: {call_sid}")
-
+if __name__ == "__main__":
+    asyncio.run(make_call(PHONE_NUMBER_FROM))
 
