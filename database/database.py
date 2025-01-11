@@ -75,19 +75,48 @@ def populate_rooms():
         ('1012', 'Double', True, 100.00, 2, 1),
         ('1031', 'Suite', True, 180.00, 4, 1),
         ('1041', 'Deluxe', True, 250.00, 5, 1),
+        ('111', 'Single', True, 60.00, 1, 1),
+        ('012', 'Double', True, 100.00, 2, 1),
+        ('031', 'Suite', True, 180.00, 4, 1),
+        ('141', 'Deluxe', True, 250.00, 5, 1),
 
         # Rooms for Hotel Saadien
         ('2011', 'Single', True, 65.00, 1, 2),
         ('2021', 'Double', True, 110.00, 2, 2),
         ('2031', 'Suite', True, 190.00, 4, 2),
         ('2041', 'Deluxe', True, 240.00, 5, 2),
+        ('211', 'Single', True, 65.00, 1, 2),
+        ('221', 'Double', True, 110.00, 2, 2),
+        ('231', 'Suite', True, 190.00, 4, 2),
+        ('241', 'Deluxe', True, 240.00, 5, 2),
 
         # Rooms for Hotel Imperial
         ('3011', 'Single', True, 55.00, 1, 3),
         ('3021', 'Double', True, 90.00, 2, 3),
         ('3031', 'Suite', True, 170.00, 4, 3),
         ('3041', 'Deluxe', True, 230.00, 5, 3),
+        ('311', 'Single', True, 55.00, 1, 3),
+        ('321', 'Double', True, 90.00, 2, 3),
+        ('331', 'Suite', True, 170.00, 4, 3),
+        ('341', 'Deluxe', True, 230.00, 5, 3),
 
+        # Rooms for Hotel Medina
+        ('411', 'Single', True, 70.00, 1, 4),
+        ('421', 'Double', True, 120.00, 2, 4),
+        ('431', 'Suite', True, 200.00, 4, 4),
+        ('441', 'Deluxe', True, 280.00, 5, 4),
+
+        # Rooms for Hotel Oasis
+        ('511', 'Single', True, 50.00, 1, 5),
+        ('521', 'Double', True, 85.00, 2, 5),
+        ('531', 'Suite', True, 150.00, 4, 5),
+        ('541', 'Deluxe', True, 220.00, 5, 5),
+
+        # Rooms for Hotel Al-Bahr
+        ('611', 'Single', True, 75.00, 1, 6),
+        ('621', 'Double', True, 130.00, 2, 6),
+        ('631', 'Suite', True, 220.00, 4, 6),
+        ('641', 'Deluxe', True, 300.00, 5, 6),
         # Rooms for Hotel Medina
         ('4011', 'Single', True, 70.00, 1, 4),
         ('4021', 'Double', True, 120.00, 2, 4),
@@ -141,7 +170,7 @@ def create_and_populate_tables():
 
         # Insert sample bookings data
         print("Inserting sample data into bookings table...")
-        booking_query, bookings_data = populate_bookings()
+        booking_query, bookings_data = populate_rooms()
         cursor.executemany(booking_query, bookings_data)
         print("Bookings data inserted successfully.")
 
