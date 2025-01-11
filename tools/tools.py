@@ -148,8 +148,8 @@ def get_session():
     return Session()
 
 def get_available_rooms(
-    check_in: date = None,
-    check_out: date = None,
+    check_in: date,
+    check_out: date,
     area: str,
     room_type: str = None,
     max_guests: int = None
@@ -168,20 +168,18 @@ def get_available_rooms(
         # Get hotel IDs for querying rooms
         hotel_ids = [hotel.id for hotel in hotels]
 
-        # Create the query for available rooms
+        # Subquery to find rooms booked during the given period
+        subquery = session.query(Booking.room_id).filter(
+            Booking.check_in_date < check_out,
+            Booking.check_out_date > check_in
+        ).subquery()
+
+        # Query to find rooms in the hotels in the area that are not in the subquery and are available
         query = session.query(Room).filter(
             Room.hotel_id.in_(hotel_ids),
+            Room.id.notin_(subquery),
             Room.is_available == True
         )
-
-        # If check_in and check_out are provided, filter by the booked rooms during that period
-        if check_in and check_out:
-            # Subquery to find rooms booked during the given period
-            subquery = session.query(Booking.room_id).filter(
-                Booking.check_in_date < check_out,
-                Booking.check_out_date > check_in
-            ).subquery()
-            query = query.filter(Room.id.notin_(subquery))
 
         # Filter by room type if provided
         if room_type:
@@ -194,7 +192,7 @@ def get_available_rooms(
         available_rooms = query.all()
 
         if not available_rooms:
-            return f"No rooms available in the area '{area}' for the selected filters."
+            return f"No rooms available in the area '{area}' for the selected dates, room type: {room_type}, and max guests: {max_guests}."
 
         # Return room details grouped by hotel
         result = {}
@@ -212,7 +210,6 @@ def get_available_rooms(
         return result
     finally:
         session.close()
-
 
 def book_room(
     hotel_name: str,
