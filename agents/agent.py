@@ -5,19 +5,13 @@ import json
 import base64
 import asyncio
 import websockets
-from fastapi import FastAPI, WebSocket, Request
-from fastapi.responses import JSONResponse
 from fastapi.websockets import WebSocketDisconnect
-from starlette.responses import HTMLResponse
-from twilio.twiml.voice_response import VoiceResponse, Connect
-from dotenv import load_dotenv
-
 from fastapi import WebSocket
 from tools.functioncalling import book_room_function, get_available_rooms_function, \
     webscraper_for_recommendations_function, function_to_schema, invoke_function
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
+active_websocket = set()
 
 
 
@@ -88,7 +82,9 @@ async def handle_call(websocket: WebSocket,system_message,initial_message,tool_s
             }
     ) as openai_ws:
         await initialize_session(openai_ws,system_message=system_message,initial_message=initial_message,tool_schemas=tool_schemas)
-
+        global active_websocket
+        active_websocket.add(websocket)
+        active_websocket.add(openai_ws)
         # Connection specific state
         stream_sid = None
         latest_media_timestamp = 0

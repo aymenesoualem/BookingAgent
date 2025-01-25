@@ -3,14 +3,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.header import Header
-from http.client import responses
 
+from twilio.twiml.voice_response import VoiceResponse
+
+from rag.kdb import init_chromadb_client, retrieve_info
 from templates.email_template import BOOKING_EMAIL_TEMPLATE
 from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Numeric, Boolean, TIMESTAMP, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 import sys
-from datetime import date
+from datetime import date, datetime
 import os
 
 from dotenv import load_dotenv
@@ -106,38 +108,61 @@ def send_email_with_banner(hotel_name, room_number, customer_name, check_in, che
 
 Base = declarative_base()
 
+
 class Hotel(Base):
     __tablename__ = 'hotels'
+
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), unique=True, nullable=False)
-    area = Column(String(100), nullable=False)
+    name = Column(String, unique=True, nullable=False)
+    area = Column(String, nullable=False)
+
+    # One-to-many relationship with rooms
     rooms = relationship('Room', back_populates='hotel')
+
 
 class Room(Base):
     __tablename__ = 'rooms'
+
     id = Column(Integer, primary_key=True)
     room_number = Column(String(10), unique=True, nullable=False)
     room_type = Column(String(50), nullable=False)
     is_available = Column(Boolean, default=True, nullable=False)
     price_per_night = Column(Numeric(10, 2), nullable=False)
     max_guests = Column(Integer, nullable=False)
+
     hotel_id = Column(Integer, ForeignKey('hotels.id'), nullable=False)
     hotel = relationship('Hotel', back_populates='rooms')
 
+    # One-to-many relationship with bookings
+    bookings = relationship('Booking', back_populates='room')
+
+
+class Customer(Base):
+    __tablename__ = 'customers'
+
+    id = Column(Integer, primary_key=True)
+    phone_number = Column(String(15), unique=True)
+    name = Column(String(100), nullable=False)
+
+    # One-to-many relationship with bookings
+    bookings = relationship('Booking', back_populates='customer')
+
+
 class Booking(Base):
     __tablename__ = 'bookings'
+
     id = Column(Integer, primary_key=True)
-    customer_name = Column(String(100), nullable=False)
-    customer_number = Column(String(100), nullable=False)
-    feedback = Column(String(100), nullable=True)
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
     check_in_date = Column(Date, nullable=False)
     check_out_date = Column(Date, nullable=False)
+    feedback = Column(String)
     room_id = Column(Integer, ForeignKey('rooms.id'), nullable=False)
-    created_at = Column(TIMESTAMP, default=func.now())
-    room = relationship('Room')
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
-    class Config:
-        orm_mode = True
+    customer = relationship('Customer', back_populates='bookings')
+    room = relationship('Room', back_populates='bookings')
+
+
 DATABASE_URL = "postgresql://agent:booking@localhost:5432/Hotel_db"
 
 # Create engine and session
@@ -168,16 +193,10 @@ def get_available_rooms(
         # Get hotel IDs for querying rooms
         hotel_ids = [hotel.id for hotel in hotels]
 
-        # Subquery to find rooms booked during the given period
-        subquery = session.query(Booking.room_id).filter(
-            Booking.check_in_date < check_out,
-            Booking.check_out_date > check_in
-        ).subquery()
-
-        # Query to find rooms in the hotels in the area that are not in the subquery and are available
-        query = session.query(Room).filter(
+        # Query to find rooms in the hotels in the area that are not booked during the given period
+        query = session.query(Room).join(Hotel).outerjoin(Booking).filter(
             Room.hotel_id.in_(hotel_ids),
-            Room.id.notin_(subquery),
+            (Booking.check_in_date >= check_out) | (Booking.check_out_date <= check_in) | (Booking.id == None),
             Room.is_available == True
         )
 
@@ -194,13 +213,13 @@ def get_available_rooms(
         if not available_rooms:
             return f"No rooms available in the area '{area}' for the selected dates, room type: {room_type}, and max guests: {max_guests}."
 
-        # Return room details grouped by hotel
-        result = {}
+        # Group and structure the results by hotel
+        result = []
         for room in available_rooms:
-            hotel_name = session.query(Hotel.name).filter(Hotel.id == room.hotel_id).scalar()
-            if hotel_name not in result:
-                result[hotel_name] = []
-            result[hotel_name].append({
+            hotel = room.hotel  # Use the relationship to get the hotel directly
+            result.append({
+                "hotel_name": hotel.name,
+                "hotel_area": hotel.area,
                 "room_number": room.room_number,
                 "room_type": room.room_type,
                 "price_per_night": float(room.price_per_night),
@@ -211,10 +230,58 @@ def get_available_rooms(
     finally:
         session.close()
 
+def get_customer_by_phone_number(phone_number: str):
+    """
+    Retrieve a customer's details using their phone number.
+
+    """
+    session = get_session()
+    try:
+        # Query for the customer using the provided phone number
+        customer = session.query(Customer).filter(Customer.phone_number == phone_number).first()
+        if not customer:
+            return f"No customer found with phone number '{phone_number}'."
+
+        # Prepare the customer's data
+        result = {
+            "customer_id": customer.id,
+            "phone_number": customer.phone_number,
+            "bookings": [
+                {
+                    "booking_id": booking.id,
+                    "check_in_date": booking.check_in_date,
+                    "check_out_date": booking.check_out_date,
+                    "room_id": booking.room_id,
+                }
+                for booking in customer.bookings
+            ],
+        }
+        return result
+    finally:
+        session.close()
+# Add a new customer to the database
+def add_customer(phone_number: str, name: str):
+    session = get_session()
+    try:
+        # Check if the customer already exists
+        existing_customer = session.query(Customer).filter(Customer.phone_number == phone_number).first()
+        if existing_customer:
+            return f"Customer with phone number '{phone_number}' already exists."
+
+        # Create and add the new customer
+        new_customer = Customer(phone_number=phone_number, name=name)
+        session.add(new_customer)
+        session.commit()
+
+        return f"Customer '{name}' with phone number '{phone_number}' added successfully."
+    except Exception as e:
+        session.rollback()
+        return f"Error adding customer: {e}"
+    finally:
+        session.close()
 def book_room(
     hotel_name: str,
     room_number: str,
-    customer_name: str,
     customer_number: str,
     check_in: date,
     check_out: date
@@ -244,20 +311,25 @@ def book_room(
         if overlapping_bookings:
             return f"Room {room_number} in hotel '{hotel_name}' is not available from {check_in} to {check_out}."
 
+        # Find or create the customer
+        customer = session.query(Customer).filter(Customer.phone_number == customer_number).first()
+        if not customer:
+            return f"Customer with phone number {customer_number} does not exist. Please register the customer first."
+
         # Create a new booking
         new_booking = Booking(
             room_id=room.id,
-            customer_name=customer_name,
-            customer_number=customer_number,
+            customer_id=customer.id,
             check_in_date=check_in,
             check_out_date=check_out
         )
         session.add(new_booking)
         session.commit()
 
-        return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer_name} ({customer_number}) from {check_in} to {check_out}."
+        return f"Room {room_number} in hotel '{hotel_name}' successfully booked for {customer.name} ({customer.phone_number}) from {check_in} to {check_out}."
     finally:
         session.close()
+
 
 
 # Function to delete a booking
@@ -267,13 +339,19 @@ def delete_booking(booking_id: int):
     """
     session = get_session()
     try:
+        # Fetch the booking by its ID
         booking = session.query(Booking).filter_by(id=booking_id).first()
         if not booking:
             return f"Booking with ID {booking_id} does not exist."
 
+        # Delete the booking
         session.delete(booking)
         session.commit()
+
         return f"Booking with ID {booking_id} has been successfully deleted."
+    except Exception as e:
+        session.rollback()  # Rollback in case of an error
+        return f"An error occurred while trying to delete the booking: {str(e)}"
     finally:
         session.close()
 
@@ -282,7 +360,6 @@ def alter_booking(
     booking_id: int,
     new_check_in: date = None,
     new_check_out: date = None,
-    new_customer_name: str = None,
     new_customer_number: str = None,
     new_feedback: str = None
 ):
@@ -291,17 +368,31 @@ def alter_booking(
     """
     session = get_session()
     try:
+        # Fetch the booking by its ID
         booking = session.query(Booking).filter_by(id=booking_id).first()
         if not booking:
             return f"Booking with ID {booking_id} does not exist."
 
-        # Update fields if new values are provided
-        if new_check_in:
-            booking.check_in_date = new_check_in
-        if new_check_out:
-            booking.check_out_date = new_check_out
-        if new_customer_name:
-            booking.customer_name = new_customer_name
+        # Validate date changes for overlapping bookings
+        if new_check_in or new_check_out:
+            check_in = new_check_in or booking.check_in_date
+            check_out = new_check_out or booking.check_out_date
+
+            overlapping_bookings = session.query(Booking).filter(
+                Booking.room_id == booking.room_id,
+                Booking.id != booking_id,  # Exclude the current booking
+                Booking.check_in_date < check_out,
+                Booking.check_out_date > check_in
+            ).all()
+
+            if overlapping_bookings:
+                return f"Updated dates overlap with an existing booking. Please select different dates."
+
+            # Update check-in and check-out dates
+            booking.check_in_date = check_in
+            booking.check_out_date = check_out
+
+        # Update other fields if new values are provided
         if new_customer_number:
             booking.customer_number = new_customer_number
         if new_feedback:
@@ -309,36 +400,20 @@ def alter_booking(
 
         session.commit()
         return f"Booking with ID {booking_id} has been successfully updated."
+    except Exception as e:
+        session.rollback()  # Rollback in case of an error
+        return f"An error occurred while trying to update the booking: {str(e)}"
     finally:
         session.close()
+
 # Function to find a booking by customer number
 def find_booking_by_number(customer_number: str):
-    """
-    Find bookings by the customer's phone number.
-    """
-    session = get_session()
-    try:
-        bookings = session.query(Booking).filter_by(customer_number=customer_number).all()
-        if not bookings:
-            return f"No bookings found for customer number '{customer_number}'."
-
-        result = []
-        for booking in bookings:
-            room = session.query(Room).filter_by(id=booking.room_id).first()
-            hotel = session.query(Hotel).filter_by(id=room.hotel_id).first()
-            result.append({
-                "booking_id": booking.id,
-                "customer_name": booking.customer_name,
-                "hotel_name": hotel.name,
-                "room_number": room.room_number,
-                "check_in_date": booking.check_in_date,
-                "check_out_date": booking.check_out_date,
-                "feedback": booking.feedback
-            })
-        return result
-    finally:
-        session.close()
-
+    session = Session()
+    customer = session.query(Customer).filter_by(phone_number=customer_number).first()
+    if customer:
+        bookings = session.query(Booking).filter_by(customer_id=customer.id).all()
+        return bookings
+    return []
 # Function to add feedback to a specific booking
 def add_feedback(booking_id: int, feedback: str):
     """
@@ -355,14 +430,65 @@ def add_feedback(booking_id: int, feedback: str):
         return f"Feedback added to booking with ID {booking_id}."
     finally:
         session.close()
+# Tool integration for the agent
+def chromadb_retrieval(query_embedding):
+
+    client = init_chromadb_client()
+    collection_name = "default_collection"  # Update with your collection name
+    results = retrieve_info(client, collection_name, query_embedding)
+    return results
+
+
+def hangup():
+    response = VoiceResponse()
+    response.hangup()
+    return response
 
 
 def main():
-    book_room(
-        hotel_name="Hotel Atlas",
-        room_number="1012",
-        customer_name="Ayoub Mounir",
-        customer_number="+212673375314",
-        check_in=date(2025, 1, 10),
-        check_out=date(2025, 1, 15)
-    )
+    # Insert a customer (if they don't exist yet)
+    customer_number = "+212673375314"
+    customer_name = "John Doe"
+
+    session = get_session()
+
+    # Check if the customer already exists
+    customer = session.query(Customer).filter(Customer.phone_number == customer_number).first()
+    if not customer:
+        customer = Customer(name=customer_name, phone_number=customer_number)
+        session.add(customer)
+        session.commit()
+        print(f"Customer {customer_name} with phone number {customer_number} added.")
+    else:
+        print(f"Customer {customer_name} with phone number {customer_number} already exists.")
+
+    # Find available rooms in Casablanca
+    area = "Casablanca"
+    available_rooms = get_available_rooms(check_in=date(2025, 1, 20), check_out=date(2025, 1, 25), area=area)
+
+    if available_rooms:
+        print(f"Available Rooms: {available_rooms}")
+    else:
+        print(f"No rooms available in the area '{area}'.")
+
+    if available_rooms:
+        # Assuming the first available room is booked
+        room_to_book = available_rooms[0]  # You can customize this if you need specific logic
+
+        # Extract relevant data from room_to_book
+        hotel_name = room_to_book['hotel_name']
+        room_number = room_to_book['room_number']
+        customer_number = customer.phone_number  # Assuming the customer has already been added and the phone number is available
+        check_in = date(2025, 1, 20)  # Customize the check-in date
+        check_out = date(2025, 1, 25)  # Customize the check-out date
+
+        # Proceed with booking
+        booking_response = book_room(hotel_name, room_number, customer_number, check_in, check_out)
+        print(f"Booking Response: {booking_response}")
+    else:
+        print("No rooms available to book.")
+
+    session.close()
+
+
+

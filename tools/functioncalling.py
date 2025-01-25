@@ -3,7 +3,8 @@ import os
 from datetime import date
 
 from tools import send_sms, send_email_with_banner, book_room, get_available_rooms, web_scraper_for_recommendation
-from tools.tools import delete_booking, alter_booking, find_booking_by_number, add_feedback
+from tools.tools import delete_booking, alter_booking, find_booking_by_number, add_feedback, hangup, chromadb_retrieval, \
+    get_customer_by_phone_number, add_customer
 
 
 def book_room_function(hotel_name: str, room_number: str, customer_name: str,customer_number: str, check_in: date, check_out: date):
@@ -48,23 +49,25 @@ def alter_booking_function(
     Modifies an existing booking with updated details such as dates or customer information.
     """
     return alter_booking(booking_id, new_check_in, new_check_out, new_customer_name, new_customer_number)
-
+def get_customer_function(phone_number: str):
+    """Fetches customer information using their phone number."""
+    return get_customer_by_phone_number(phone_number)
 def find_booking_by_number_function(customer_number: str):
     """
     Searches for a booking using the customer's phone number.
     """
     return find_booking_by_number(customer_number)
-
 def add_feedback_function(booking_id: int, feedback: str):
     """
     Adds feedback for a specific booking.
     """
     return add_feedback(booking_id, feedback)
-
 def webscraper_for_recommendations_function(topic:str):
     """Fetches for things to do in the hotels area, uae this function when the user asks for things to do while visiting the hotel's area."""
     return web_scraper_for_recommendation(topic)
-
+def hangup_function():
+    """Hang up function. For where the conversation with user is over."""
+    return hangup()
 def function_to_schema(func) -> dict:
     """
     Converts a Python function's signature into a JSON schema format.
@@ -118,10 +121,29 @@ def function_to_schema(func) -> dict:
             "required": required,
         },
     }
+def add_customer_function(phone_number: str, customer_name: str):
+    """
+    Add a new customer to the database.
 
+    Args:
+        phone_number: The phone number of the customer.
+        name: The name of the customer.
 
+    Returns:
+        A success message or an error message if the customer already exists.
+    """
+    return add_customer(phone_number,customer_name)
+def knowledgebase_retrieval_function(query_embedding: str):
+    """
+    Tool to retrieve relevant information from the ChromaDB knowledge base.
 
+    Args:
+        query_embedding: Embedding of the query input.
 
+    Returns:
+        List of the top-k relevant documents.
+    """
+    return chromadb_retrieval(query_embedding)
 async def invoke_function(function_name, arguments):
     """
     Dynamically invokes a function by name with the given arguments.
@@ -132,6 +154,10 @@ async def invoke_function(function_name, arguments):
             "get_available_rooms_function": get_available_rooms_function,
             "book_room_function": book_room_function,
             "webscraper_for_recommendations_function": webscraper_for_recommendations_function,
+            "alter_booking_function": alter_booking_function,
+            "find_booking_by_number_function": find_booking_by_number_function,
+            "add_feedback_function": add_feedback_function,
+            "hangup_function": hangup_function,
             # Add more functions here as needed
         }
         if function_name in function_map:
@@ -142,3 +168,14 @@ async def invoke_function(function_name, arguments):
             print(f"Function {function_name} is not recognized.")
     except Exception as e:
         print(f"Error invoking function {function_name}: {e}")
+
+inbound_caller_tools = [book_room_function, get_available_rooms_function,
+             webscraper_for_recommendations_function,delete_booking_function,alter_booking_function,
+             find_booking_by_number_function,hangup_function,
+            knowledgebase_retrieval_function,get_customer_function,add_customer_function]
+inbound_caller_tool_schemas = [function_to_schema(tool) for tool in inbound_caller_tools]
+
+
+outbound_caller_tools = [get_customer_by_phone_number,find_booking_by_number_function, webscraper_for_recommendations_function, add_feedback_function,
+         hangup_function]
+outbound_caller_tool_schemas = [function_to_schema(tool) for tool in outbound_caller_tools]

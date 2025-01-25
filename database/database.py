@@ -1,5 +1,4 @@
 import psycopg2
-from psycopg2 import sql
 from psycopg2.errors import DuplicateTable, UniqueViolation
 
 # Database connection parameters
@@ -15,6 +14,7 @@ def create_tables():
     DROP TABLE IF EXISTS bookings CASCADE;
     DROP TABLE IF EXISTS rooms CASCADE;
     DROP TABLE IF EXISTS hotels CASCADE;
+    DROP TABLE IF EXISTS customers CASCADE;
 
     CREATE TABLE IF NOT EXISTS hotels (
         id SERIAL PRIMARY KEY,
@@ -32,13 +32,18 @@ def create_tables():
         hotel_id INTEGER NOT NULL REFERENCES hotels(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS customers (
+        id SERIAL PRIMARY KEY,
+        phone_number VARCHAR(15) UNIQUE,
+        name VARCHAR(100) NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS bookings (
         id SERIAL PRIMARY KEY,
-        customer_number VARCHAR(100) NOT NULL,
-        customer_name VARCHAR(100) NOT NULL,
+        customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
         check_in_date DATE NOT NULL,
         check_out_date DATE NOT NULL,
-        feedback TEXT, -- Added column for feedback
+        feedback TEXT,
         room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
