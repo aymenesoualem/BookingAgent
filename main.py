@@ -14,10 +14,7 @@ from twilio.twiml.voice_response import VoiceResponse, Connect
 from dotenv import load_dotenv
 from agents.agent import  handle_call
 from outboundcall import make_call
-from tools.functioncalling import invoke_function, book_room_function, get_available_rooms_function, \
-    webscraper_for_recommendations_function, function_to_schema, delete_booking_function, alter_booking_function, \
-    find_booking_by_number_function, add_feedback_function, hangup_function, knowledgebase_retrieval_function, \
-    inbound_caller_tool_schemas, outbound_caller_tool_schemas
+from tools.functioncalling import inbound_caller_tool_schemas, outbound_caller_tool_schemas
 
 load_dotenv()
 PORT = int(os.getenv("PORT", 5050))
@@ -77,9 +74,20 @@ def get_bookings():
 
         # Query to join bookings and rooms
         query = """
-        SELECT b.id,b.customer_name, r.room_number, b.check_in_date, b.check_out_date, b.customer_number,b.feedback AS phone_number
-        FROM bookings b
-        JOIN rooms r ON b.room_id = r.id;
+        SELECT 
+            b.id AS booking_id,
+            c.name AS customer_name,
+            r.room_number,
+            b.check_in_date,
+            b.check_out_date,
+            c.phone_number AS customer_number,
+            b.feedback
+        FROM 
+            bookings b
+        JOIN 
+            customers c ON b.customer_id = c.id
+        JOIN 
+            rooms r ON b.room_id = r.id;
         """
 
         # Execute query

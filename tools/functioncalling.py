@@ -158,6 +158,9 @@ async def invoke_function(function_name, arguments):
             "find_booking_by_number_function": find_booking_by_number_function,
             "add_feedback_function": add_feedback_function,
             "hangup_function": hangup_function,
+            "get_customer_function": get_customer_function,
+            "add_customer_function": add_customer_function,
+            "knowledgebase_retrieval_function": knowledgebase_retrieval_function,
             # Add more functions here as needed
         }
         if function_name in function_map:
