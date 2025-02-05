@@ -74,7 +74,7 @@ async def handle_call(websocket: WebSocket,system_message,initial_message,tool_s
     ssl_context.verify_mode = ssl.CERT_NONE
 
     async with websockets.connect(
-            'wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview',
+            'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
             ssl=ssl_context,
             extra_headers={
                 "Authorization": f"Bearer {OPENAI_API_KEY}",

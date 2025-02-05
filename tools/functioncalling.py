@@ -21,7 +21,7 @@ def book_room_function(hotel_name: str, room_number: str, customer_name: str,cus
     # Send confirmation SMS to the hotel
     send_sms(hotel_phone_number, confirmation_message)
     send_email_with_banner(hotel_name,room_number, customer_name, check_in, check_out)
-    return book_room(hotel_name, room_number, customer_name,customer_number, check_in, check_out)
+    return book_room(hotel_name, room_number,customer_number, check_in, check_out)
 
 def get_available_rooms_function(
     check_in: date,

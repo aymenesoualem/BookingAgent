@@ -284,7 +284,6 @@ async def handle_media_stream_outbound(websocket: WebSocket ,customer_number: st
     ### Customer Number
     The customer's number for this session is: """+customer_number +"""
     
-    When the conversation is over invoke the hangup function
     """
 
     initial_message = "Greet the user with 'Hello there! I am an AI voice assistant for Moravelo Hotel Group where comfort meets elegance.' repeat the message in French then in Arabic."
